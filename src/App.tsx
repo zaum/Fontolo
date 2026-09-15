@@ -213,6 +213,15 @@ export default function App() {
         }
       }
 
+      if ((e.key === "a" || e.key === "A") && !inField && (e.ctrlKey || e.metaKey)) {
+        const st = useFontStore.getState();
+        if (st.compare || st.settingsOpen || st.helpOpen || st.paletteOpen) return;
+        if (st.viewMode !== "grid" && st.viewMode !== "list") return;
+        if (st.visibleOrder.length === 0) return;
+        e.preventDefault();
+        st.selectAllVisible();
+      }
+
       if ((e.key === "c" || e.key === "C") && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const st = useFontStore.getState();
         if (st.compare || st.settingsOpen || st.helpOpen || st.selection.length < 2) return;

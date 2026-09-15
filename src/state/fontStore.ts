@@ -133,11 +133,13 @@ interface FontStore {
   renameCollection: (from: string, to: string) => Promise<void>;
   toggleFamilyInCollection: (collection: string, family: string) => Promise<void>;
   toggleFavorite: (family: string) => Promise<void>;
+  favoriteMany: (families: string[]) => Promise<void>;
   setFamilyNote: (family: string, note: string) => Promise<void>;
   setFamiliesActiveBulk: (families: string[], active: boolean) => Promise<void>;
   applyFamilyInApp: (family: string, app: AdobeApp) => Promise<void>;
   setPanelWidth: (w: number) => void;
   selectWith: (family: string, mode: "single" | "toggle" | "range", order: string[]) => void;
+  selectAllVisible: () => void;
   openCompare: (families: string[]) => void;
   closeCompare: () => void;
   setComparePicking: (on: boolean) => void;
@@ -733,6 +735,19 @@ export const useFontStore = create<FontStore>((set, get) => ({
     }
   },
 
+  favoriteMany: async (families) => {
+    const prev = get().favorites;
+    const missing = families.filter((f) => !prev.includes(f));
+    if (missing.length === 0) return;
+    set({ favorites: [...prev, ...missing] });
+    try {
+      for (const f of missing) await ipc.setFavorite(f, true);
+    } catch (e) {
+      set({ favorites: prev });
+      toast.error(t("toast.couldntUpdateFavorites"), String(e));
+    }
+  },
+
   setFamilyNote: async (family, note) => {
     const prev = get().notes;
     const next = { ...prev };
@@ -851,6 +866,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
       }
     }
     set({ selection: [family], selectedFamily: family });
+  },
+
+  selectAllVisible: () => {
+    const order = get().visibleOrder;
+    if (order.length === 0) return;
+    set({ selection: [...order], selectedFamily: order[order.length - 1] });
   },
 
   openCompare: (families) => set({ compare: families.slice(0, 4), comparePicking: false }),
@@ -1165,7 +1186,12 @@ export function selectVisibleFamilies(s: {
     out = out.filter((f) => s.lastImported.includes(f.name));
   }
   if (s.nav.kind === "activated") {
-    out = out.filter((f) => f.active && !s.sessionActivated.includes(f.name));
+    out = out.filter(
+      (f) =>
+        f.active &&
+        !s.sessionActivated.includes(f.name) &&
+        !(f.faces.length > 0 && f.faces.every((face) => face.source === "system")),
+    );
   }
   if (s.nav.kind === "activatedSession") {
     out = out.filter((f) => s.sessionActivated.includes(f.name));

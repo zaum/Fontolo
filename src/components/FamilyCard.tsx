@@ -175,6 +175,12 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           aria-pressed={favorite}
           onClick={(e) => {
             e.stopPropagation();
+            const st = useFontStore.getState();
+            if (st.selection.length > 1 && st.selection.includes(family.name)) {
+              playStar(true);
+              void st.favoriteMany(st.selection);
+              return;
+            }
             playStar(!favorite);
             void toggleFavorite(family.name);
           }}

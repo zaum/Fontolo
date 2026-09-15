@@ -621,6 +621,12 @@ export function DetailPanel() {
                 aria-label={t(favorite ? "detail.unfavorite" : "detail.favorite")}
                 aria-pressed={favorite}
                 onClick={() => {
+                  const st = useFontStore.getState();
+                  if (st.selection.length > 1 && st.selection.includes(family.name)) {
+                    playStar(true);
+                    void st.favoriteMany(st.selection);
+                    return;
+                  }
                   playStar(!favorite);
                   void toggleFavorite(family.name);
                 }}
