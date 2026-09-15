@@ -124,22 +124,18 @@ async fn install_fonts(
     // New fonts start deactivated on every OS: run them through the regular
     // deactivate path so a later toggle can bring them back.
     // The Settings toggle can opt back into auto-activation for small batches.
+    let mut auto = false;
     if let Ok(mut state) = store.0.lock() {
         if mode == installer::InstallMode::Link {
             for face in &result.installed {
                 state.linked.insert(face.path.clone());
             }
         }
-        let auto = state.auto_activate_imports && result.installed.len() < 64;
+        auto = state.auto_activate_imports && result.installed.len() < 64;
         for face in &result.installed {
             let _ = activation::sync(&mut state, &face.path, auto);
         }
         let _ = store::save(&state);
-        if auto {
-            for face in &mut result.installed {
-                face.active = true;
-            }
-        }
     }
     // Previews load through the asset protocol: allow the folders new files live in.
     for face in &result.installed {
@@ -148,8 +144,11 @@ async fn install_fonts(
             allow_dir(&scope_app, parent);
         }
     }
+    // Report the activation state that was actually applied above: with
+    // auto-activation on these fonts are registered already, otherwise they
+    // are deactivated and a later toggle can bring them back.
     for face in &mut result.installed {
-        face.active = false;
+        face.active = auto;
     }
     Ok(result)
 }
@@ -543,32 +542,6 @@ fn set_prefs(store: State<Store>, prefs: serde_json::Value) -> Result<(), String
 }
 
 #[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err(format!("refusing to open non-web URL: {url}"));
-    }
-
-    #[cfg(target_os = "linux")]
-    let spawned = std::process::Command::new("xdg-open").arg(&url).spawn();
-
-    #[cfg(target_os = "macos")]
-    let spawned = std::process::Command::new("open").arg(&url).spawn();
-
-    #[cfg(target_os = "windows")]
-    let spawned = {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-    };
-
-    spawned.map(|_| ()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn adobe_available() -> bool {
     adobe::available()
 }
@@ -659,7 +632,6 @@ pub fn run() {
             get_settings,
             set_settings,
             default_library_dir,
-            open_url,
             adobe_available,
             apply_font_in_app
         ])

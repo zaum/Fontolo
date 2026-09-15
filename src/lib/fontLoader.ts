@@ -5,8 +5,28 @@ import { useEffect, useState } from "react";
 import type { FontFace as ZFontFace } from "./ipc";
 
 type LoadState = "loading" | "loaded" | "failed";
-const cache = new Map<string, LoadState>();
+interface CacheEntry {
+  state: LoadState;
+  failedAt?: number;
+}
+const cache = new Map<string, CacheEntry>();
 const listeners = new Map<string, Set<() => void>>();
+
+// A font can briefly fail while it is being written (install/activate);
+// keep the failure so cards render fast, but let a later view retry it.
+const FAILED_RETRY_MS = 30_000;
+
+function getState(name: string): LoadState | undefined {
+  const entry = cache.get(name);
+  if (!entry) return undefined;
+  if (entry.state === "failed" && entry.failedAt !== undefined) {
+    if (Date.now() - entry.failedAt > FAILED_RETRY_MS) {
+      cache.delete(name);
+      return undefined;
+    }
+  }
+  return entry.state;
+}
 
 function cssName(face: ZFontFace): string {
 
@@ -21,18 +41,18 @@ function hash(s: string): string {
 
 function ensureLoaded(face: ZFontFace): void {
   const name = cssName(face);
-  if (cache.has(name)) return;
-  cache.set(name, "loading");
+  if (getState(name) !== undefined) return;
+  cache.set(name, { state: "loading" });
 
   const url = convertFileSrc(face.previewPath ?? face.path);
   const ff = new FontFace(name, `url("${url}")`);
   ff.load()
     .then(() => {
       document.fonts.add(ff);
-      cache.set(name, "loaded");
+      cache.set(name, { state: "loaded" });
     })
     .catch(() => {
-      cache.set(name, "failed");
+      cache.set(name, { state: "failed", failedAt: Date.now() });
     })
     .finally(() => {
       listeners.get(name)?.forEach((fn) => fn());
@@ -50,7 +70,7 @@ export function useFontCss(face: ZFontFace | null): {
   useEffect(() => {
     if (!face || !name) return;
     ensureLoaded(face);
-    if (cache.get(name) === "loading") {
+    if (getState(name) === "loading") {
       const set = listeners.get(name) ?? new Set();
       const fn = () => bump((n) => n + 1);
       set.add(fn);
@@ -61,7 +81,7 @@ export function useFontCss(face: ZFontFace | null): {
     }
   }, [face, name]);
 
-  const state = name ? cache.get(name) : undefined;
+  const state = name ? getState(name) : undefined;
   return {
     fontFamily: state === "loaded" && name ? name : null,
     failed: state === "failed",
@@ -71,13 +91,13 @@ export function useFontCss(face: ZFontFace | null): {
 export function loadFaceCss(face: ZFontFace): Promise<string> {
   const name = cssName(face);
   ensureLoaded(face);
-  const state = cache.get(name);
+  const state = getState(name);
   if (state === "loaded") return Promise.resolve(name);
   if (state === "failed") return Promise.reject(new Error("font failed to load"));
   return new Promise((resolve, reject) => {
     const set = listeners.get(name) ?? new Set();
     set.add(() => {
-      if (cache.get(name) === "loaded") resolve(name);
+      if (getState(name) === "loaded") resolve(name);
       else reject(new Error("font failed to load"));
     });
     listeners.set(name, set);
