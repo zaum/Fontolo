@@ -63,7 +63,7 @@ function MenuPanel({ x, y, items }: { x: number; y: number; items: MenuItem[] })
       x: Math.min(x, window.innerWidth - r.width - 8),
       y: Math.min(y, window.innerHeight - r.height - 8),
     });
-  }, [x, y]);
+  }, [x, y, items]);
 
   useEffect(() => {
     const el = ref.current;
@@ -89,10 +89,86 @@ function MenuPanel({ x, y, items }: { x: number; y: number; items: MenuItem[] })
     return () => el.removeEventListener("keydown", onKey);
   }, [items]);
 
+  const renderCheck = (item: Extract<MenuItem, { kind: "check" }>, key: number) => (
+    <button
+      key={key}
+      role="menuitemcheckbox"
+      aria-checked={item.checked}
+      className="ctx-item"
+      onClick={() => {
+        item.action();
+        close();
+      }}
+    >
+      <span className={`ctx-checkbox ${item.checked ? "ctx-checked" : ""}`}>
+        {item.checked && (
+          <motion.span
+            style={{ display: "grid", placeItems: "center" }}
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={springSnappy}
+          >
+            <Check size={11} strokeWidth={2.5} />
+          </motion.span>
+        )}
+      </span>
+      <span className="ctx-label" title={item.label}>
+        {item.label}
+      </span>
+    </button>
+  );
+
+  const renderItem = (
+    item: Extract<MenuItem, { kind?: "item" }>,
+    key: number,
+  ) => (
+    <button
+      key={key}
+      role="menuitem"
+      className={`ctx-item ${item.danger ? "ctx-danger" : ""}`}
+      disabled={item.disabled}
+      onClick={() => {
+        item.action();
+        close();
+      }}
+    >
+      {item.icon && <span className="ctx-icon">{item.icon}</span>}
+      <span className="ctx-label">{item.label}</span>
+    </button>
+  );
+
+  // Long runs of check items (collections / tags) render in side-by-side
+  // columns instead of one tall list.
+  const GRID_THRESHOLD = 8;
+  const GRID_3_COLS_AT = 18;
+  type Block =
+    | { type: "single"; item: MenuItem; key: number }
+    | { type: "grid"; items: Extract<MenuItem, { kind: "check" }>[]; key: number };
+  const blocks: Block[] = [];
+  let run: Extract<MenuItem, { kind: "check" }>[] = [];
+  const flushRun = () => {
+    if (run.length >= GRID_THRESHOLD) {
+      blocks.push({ type: "grid", items: run, key: blocks.length });
+    } else {
+      for (const item of run) blocks.push({ type: "single", item, key: blocks.length });
+    }
+    run = [];
+  };
+  items.forEach((item) => {
+    if (item.kind === "check") {
+      run.push(item);
+    } else {
+      flushRun();
+      blocks.push({ type: "single", item, key: blocks.length });
+    }
+  });
+  flushRun();
+  const hasGrid = blocks.some((b) => b.type === "grid");
+
   return (
     <motion.div
       ref={ref}
-      className="ctx-menu glass-e3"
+      className={`ctx-menu glass-e3${hasGrid ? " ctx-wide" : ""}`}
       style={{ left: pos.x, top: pos.y }}
       initial={{ opacity: 0, scale: 0.96, y: -4 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -100,56 +176,31 @@ function MenuPanel({ x, y, items }: { x: number; y: number; items: MenuItem[] })
       transition={springSnappy}
       role="menu"
     >
-      {items.map((item, i) => {
-        if (item.kind === "separator") return <div key={i} className="ctx-sep" />;
+      {blocks.map((block) => {
+        if (block.type === "grid") {
+          const cols3 = block.items.length >= GRID_3_COLS_AT;
+          return (
+            <div
+              key={block.key}
+              className={`ctx-grid${cols3 ? " ctx-cols-3" : ""}`}
+              role="group"
+            >
+              {block.items.map((item, j) =>
+                renderCheck(item, block.key * 1000 + j),
+              )}
+            </div>
+          );
+        }
+        const { item, key } = block;
+        if (item.kind === "separator") return <div key={key} className="ctx-sep" />;
         if (item.kind === "heading")
           return (
-            <div key={i} className="ctx-heading">
+            <div key={key} className="ctx-heading">
               {item.label}
             </div>
           );
-        if (item.kind === "check")
-          return (
-            <button
-              key={i}
-              role="menuitemcheckbox"
-              aria-checked={item.checked}
-              className="ctx-item"
-              onClick={() => {
-                item.action();
-                close();
-              }}
-            >
-              <span className={`ctx-checkbox ${item.checked ? "ctx-checked" : ""}`}>
-                {item.checked && (
-                  <motion.span
-                    style={{ display: "grid", placeItems: "center" }}
-                    initial={{ scale: 0.4, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={springSnappy}
-                  >
-                    <Check size={11} strokeWidth={2.5} />
-                  </motion.span>
-                )}
-              </span>
-              <span className="ctx-label">{item.label}</span>
-            </button>
-          );
-        return (
-          <button
-            key={i}
-            role="menuitem"
-            className={`ctx-item ${item.danger ? "ctx-danger" : ""}`}
-            disabled={item.disabled}
-            onClick={() => {
-              item.action();
-              close();
-            }}
-          >
-            {item.icon && <span className="ctx-icon">{item.icon}</span>}
-            <span className="ctx-label">{item.label}</span>
-          </button>
-        );
+        if (item.kind === "check") return renderCheck(item, key);
+        return renderItem(item, key);
       })}
     </motion.div>
   );

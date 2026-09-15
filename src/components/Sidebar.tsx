@@ -177,6 +177,7 @@ export function Sidebar() {
       animate={{ x: 0, opacity: 1 }}
       transition={springSoft}
     >
+      <div className="sidebar-scroll">
       <div className="sidebar-section">
         <div className="sidebar-heading">{t("side.browse")}</div>
         <NavRow
@@ -250,6 +251,7 @@ export function Sidebar() {
             }}
           />
         )}
+        <div className="sidebar-list">
         {collectionNames.map((name) =>
           renaming === name ? (
             <RenameInput
@@ -293,6 +295,7 @@ export function Sidebar() {
             />
           ),
         )}
+        </div>
         {collectionNames.length === 0 && !creating && (
           <button className="sidebar-hint" onClick={() => setCreating(true)}>
             {t("side.firstCollection")}
@@ -303,6 +306,7 @@ export function Sidebar() {
       {tagCounts.size > 0 && (
         <div className="sidebar-section">
           <div className="sidebar-heading">{t("side.tags")}</div>
+          <div className="sidebar-list">
           {[...tagCounts.entries()].map(([tag, count]) => (
             <NavRow
               key={tag}
@@ -322,8 +326,10 @@ export function Sidebar() {
               }
             />
           ))}
+          </div>
         </div>
       )}
+      </div>
 
       <div className="sidebar-footer">
         <NavRow

@@ -113,45 +113,105 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 10px 12px;
+  gap: 2px;
+  padding: 8px 10px 12px;
   border-right: 1px solid rgba(var(--ink-rgb), 0.05);
   background: rgba(var(--ink-rgb), 0.015);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   z-index: 2;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sidebar scroll: scrollbar stays invisible until the pointer hovers the
+   sidebar content (Firefox uses scrollbar-color, WebKit the thumb background). */
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.25s ease;
+}
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(var(--ink-rgb), 0.22) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background-clip: padding-box;
+  transition: background 0.25s ease;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--ink-rgb), 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--ink-rgb), 0.3);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Group wrapper for rows inside a section. Keep it a plain wrapper: making it
+   a nested scroll container (overflow + overscroll-behavior) swallows the
+   wheel, because the scroll chain starts there and never reaches
+   .sidebar-scroll - the sidebar then stops scrolling over the rows. */
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+  border-radius: 5px;
 }
 
 .sidebar-section {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
+  flex-shrink: 0;
 }
 .sidebar-heading {
   font-size: var(--fs-10);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--text-tertiary);
-  padding: 14px 11px 5px;
+  color: var(--accent-a);
+  padding: 10px 10px 4px;
 }
 .sidebar-section:first-child .sidebar-heading {
-  padding-top: 8px;
+  padding-top: 6px;
 }
 .sidebar-footer {
   margin-top: auto;
+  flex-shrink: 0;
   border-top: 1px solid rgba(var(--ink-rgb), 0.05);
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 .nav-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 29px;
-  padding: 4px 11px;
+  flex-shrink: 0;
+  min-height: 26px;
+  padding: 3px 10px;
   border-radius: 5px;
   font-size: var(--fs-13);
   font-weight: 500;
@@ -191,7 +251,7 @@
   transition: color var(--t-quick) ease;
 }
 .nav-row:hover .nav-icon {
-  color: var(--text-secondary);
+  color: var(--accent-a);
 }
 .nav-active .nav-icon {
   color: var(--accent-a);
@@ -1611,19 +1671,59 @@
   z-index: 81;
   min-width: 200px;
   max-width: 280px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 6px;
   padding: 4px;
   transform-origin: top left;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
   background:
     linear-gradient(rgba(var(--scrim-rgb), 0.3), rgba(var(--scrim-rgb), 0.3)),
     var(--e3);
 }
+.ctx-menu::-webkit-scrollbar {
+  width: 8px;
+}
+.ctx-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ctx-menu::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background-clip: padding-box;
+}
+.ctx-menu:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--ink-rgb), 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.ctx-menu:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--ink-rgb), 0.3);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.ctx-menu.ctx-wide {
+  min-width: 320px;
+  max-width: min(560px, calc(100vw - 16px));
+}
+.ctx-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 4px;
+}
+.ctx-grid.ctx-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  min-height: 26px;
+  padding: 4px 9px;
   border-radius: 4px;
   font-size: var(--fs-13);
   color: var(--text-secondary);
@@ -1658,7 +1758,7 @@
 }
 .ctx-sep {
   height: 1px;
-  margin: 4px 6px;
+  margin: 3px 6px;
   background: rgba(var(--ink-rgb), 0.07);
 }
 .ctx-heading {
@@ -1667,7 +1767,7 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-tertiary);
-  padding: 6px 10px 3px;
+  padding: 5px 9px 2px;
 }
 .ctx-checkbox {
   display: grid;
@@ -1711,9 +1811,9 @@
 .collection-input {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 32px;
-  padding: 5px 11px;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 10px;
   border-radius: 5px;
   border: 1px solid var(--accent-glow);
   background: var(--e1);
@@ -2047,18 +2147,18 @@
     0 12px 32px rgba(0, 0, 0, 0.45);
 }
 .ctx-item {
-  padding: 6px 9px;
-  min-height: 30px;
+  padding: 4px 9px;
+  min-height: 26px;
 }
 .ctx-icon {
   width: 16px;
   justify-content: center;
 }
 .ctx-sep {
-  margin: 5px 4px;
+  margin: 3px 4px;
 }
 .ctx-heading {
-  padding: 7px 9px 4px;
+  padding: 5px 9px 2px;
 }
 .ctx-checkbox {
   transition: background var(--t-quick) ease, border-color var(--t-quick) ease,
@@ -3634,13 +3734,24 @@
 .lang-menu::-webkit-scrollbar-track {
   background: transparent;
 }
+.lang-menu {
+  scrollbar-color: transparent transparent;
+}
+.lang-menu:hover {
+  scrollbar-color: rgba(var(--ink-rgb), 0.22) transparent;
+}
 .lang-menu::-webkit-scrollbar-thumb {
-  background: rgba(var(--ink-rgb), 0.16);
+  background: transparent;
   border: 3px solid transparent;
   border-radius: 5px;
   background-clip: padding-box;
 }
-.lang-menu::-webkit-scrollbar-thumb:hover {
+.lang-menu:hover::-webkit-scrollbar-thumb {
+  background: rgba(var(--ink-rgb), 0.16);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.lang-menu:hover::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--ink-rgb), 0.26);
   border: 3px solid transparent;
   background-clip: padding-box;

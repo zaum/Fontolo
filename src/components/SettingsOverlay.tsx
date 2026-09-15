@@ -383,7 +383,7 @@ export function SettingsOverlay() {
 
                   {activeCategory === "autoActivation" && (
                     <section className="settings-section">
-                      <div className="detail-heading">{t("settings.autoActivation")}</div>
+                      <div className="detail-heading">{t("settings.autoActivationAffinity")}</div>
                       <div className="settings-row">
                         <div>
                           <div className="settings-label">{t("settings.affinityConnection")}</div>

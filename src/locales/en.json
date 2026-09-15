@@ -247,6 +247,7 @@
   "settings.affinityDeactivateSub": "Turn session fonts off when Affinity closes",
   "settings.affinityHelp": "Needs Affinity 3.2+ with Settings > Model Context Protocol enabled (restart after).",
   "settings.autoActivation": "Auto activation",
+  "settings.autoActivationAffinity": "Auto activation — Affinity by Canva Fonts",
   "settings.libraryData": "Library data",
   "settings.curation": "Tags, collections & notes",
   "settings.curationSub": "Back up your curation to a file, or merge one in from another machine",
