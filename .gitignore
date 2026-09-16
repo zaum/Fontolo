@@ -1,0 +1,8 @@
+todo.txt
+AGENTS.md
+node_modules/
+dist/
+src-tauri/target/
+screenshots.af
+screenshots.af~lock~
+start-dev.bat
