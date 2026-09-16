@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { ScanQueue } from "../lib/scanQueue";
 import { listen } from "@tauri-apps/api/event";
 import {
   ipc,
@@ -36,6 +37,33 @@ let initStarted = false;
 // newer delete/restore must not overwrite the fresher state when it lands
 // (that is what briefly put deleted fonts back into the list).
 let scanGen = 0;
+
+// Requests during a scan invalidate its result and schedule one trailing scan.
+const scanQueue = new ScanQueue(async (isCurrent) => {
+  const before = useFontStore.getState();
+  useFontStore.setState({ phase: "scanning", scanProgress: { done: 0, total: 0 } });
+  try {
+    const [fonts, tags, collections, favorites, notes, trash] = await Promise.all([
+      ipc.scanFonts(), ipc.getTags(), ipc.getCollections(),
+      ipc.getFavorites(), ipc.getNotes(), ipc.listTrash(),
+    ]);
+    if (!isCurrent()) return;
+    const now = useFontStore.getState();
+    // A user edit during IPC wins over metadata read before that edit.
+    applyLibrary(useFontStore.setState, useFontStore.getState, {
+      fonts,
+      tags: now.tags === before.tags ? tags : now.tags,
+      collections: now.collections === before.collections ? collections : now.collections,
+      favorites: now.favorites === before.favorites ? favorites : now.favorites,
+      notes: now.notes === before.notes ? notes : now.notes,
+      trash: now.trash === before.trash ? trash : now.trash,
+    });
+  } catch (e) {
+    if (!isCurrent()) return;
+    useFontStore.setState({ phase: "error" });
+    toast.error(t("toast.couldntScan"), String(e));
+  }
+});
 
 export type ViewMode = "grid" | "list" | "waterfall";
 export type MotionPref = "system" | "reduced";
@@ -372,7 +400,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
     await listen("fonts:changed", () => {
       clearTimeout(watchTimer);
       watchTimer = setTimeout(() => {
-        if (get().phase === "scanning") return;
+        // Queue a trailing scan even when another scan is in progress.
         const before = get().fonts.length;
         void get()
           .rescan()
@@ -419,124 +447,50 @@ export const useFontStore = create<FontStore>((set, get) => ({
         toast.error(t("toast.affinityError"), evt.message ?? "");
       }
     });
-    // Waits for the background scan to publish its result. A failed scan ends
-    // the wait right away (fonts:failed) instead of leaving the skeleton up
-    // until the timeout, so the caller can fall back to a blocking scan and
-    // show the real error.
-    const waitForReadyScan = (): Promise<FontFace[] | null> =>
-      new Promise((resolve) => {
-        let done = false;
-        const unlisten: Array<() => void> = [];
-        const finish = (value: FontFace[] | null) => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          for (const off of unlisten) {
-            try {
-              off();
-            } catch {
-              /* the listener is already gone */
-            }
-          }
-          resolve(value);
-        };
-        // A listener promise can resolve after the wait is already over.
-        const attach = (p: Promise<() => void>) => {
-          void p.then((off) => (done ? off() : unlisten.push(off))).catch(() => {});
-        };
-        const timer = setTimeout(() => finish(null), 30_000);
-        attach(
-          listen<FontFace[]>("fonts:ready", (e) => {
-            finish(Array.isArray(e.payload) ? e.payload : null);
-          }),
-        );
-        attach(listen<string>("fonts:failed", () => finish(null)));
-        // Re-peek: the scan may have completed while the listener was being
-        // registered.
-        void ipc
-          .peekFonts()
-          .then((again) => {
-            if (again) finish(again);
-          })
-          .catch(() => {});
-      });
-    // Three sources for the first paint, best first:
-    //   1. peekFonts — a scan that already finished in this run: final data;
-    //   2. warmFonts — the previous run's on-disk cache: instant, provisional;
-    //   3. waiting for the background scan — slowest, so last.
-    const finished = await ipc.peekFonts().catch(() => null);
-    const warm = finished ? null : await ipc.warmFonts().catch(() => null);
-    let fonts = finished ?? warm;
-    if (!fonts) {
-      fonts = await waitForReadyScan();
-      if (!fonts) {
-        // Nothing landed in time (or the scan failed): scan directly so the
-        // user gets the real error instead of an endless skeleton.
-        await get().rescan();
-        return;
-      }
-    }
+    // A warm parse cache is provisional, not a completed scan. Keep the
+    // indicator visible and do not prune history until fresh data arrives.
     const myGen = scanGen;
-    const meta = await Promise.all([
-      ipc.getTags(),
-      ipc.getCollections(),
-      ipc.getFavorites(),
-      ipc.getNotes(),
-      ipc.listTrash(),
-    ]);
-    if (get().phase === "scanning") {
-      applyLibrary(set, get, {
-        fonts,
-        tags: meta[0],
-        collections: meta[1],
-        favorites: meta[2],
-        notes: meta[3],
-        trash: meta[4],
-      });
-    }
-    if (warm) {
-      // The disk cache cannot know about files added since it was written, so
-      // the real scan replaces this paint as soon as it lands.
-      const fresh = await waitForReadyScan();
-      if (fresh && myGen === scanGen) {
-        const freshMeta = await Promise.all([
-          ipc.getTags(),
-          ipc.getCollections(),
-          ipc.getFavorites(),
-          ipc.getNotes(),
-          ipc.listTrash(),
-        ]);
-        applyLibrary(set, get, {
-          fonts: fresh,
-          tags: freshMeta[0],
-          collections: freshMeta[1],
-          favorites: freshMeta[2],
-          notes: freshMeta[3],
-          trash: freshMeta[4],
-        });
-      }
-    }
-  },
-
-  rescan: async () => {
-    const myGen = ++scanGen;
-    set({ phase: "scanning" });
+    const before = get();
     try {
-      const [fonts, tags, collections, favorites, notes, trash] = await Promise.all([
-        ipc.scanFonts(),
-        ipc.getTags(),
-        ipc.getCollections(),
-        ipc.getFavorites(),
-        ipc.getNotes(),
-        ipc.listTrash(),
+      const finished = await ipc.peekFonts().catch(() => null);
+      const warm = finished ? null : await ipc.warmFonts().catch(() => null);
+      const [tags, collections, favorites, notes, trash] = await Promise.all([
+        ipc.getTags(), ipc.getCollections(), ipc.getFavorites(), ipc.getNotes(), ipc.listTrash(),
       ]);
       if (myGen !== scanGen) return;
-      applyLibrary(set, get, { fonts, tags, collections, favorites, notes, trash });
+      const now = get();
+      const metadata = {
+        tags: now.tags === before.tags ? tags : now.tags,
+        collections: now.collections === before.collections ? collections : now.collections,
+        favorites: now.favorites === before.favorites ? favorites : now.favorites,
+        notes: now.notes === before.notes ? notes : now.notes,
+        trash: now.trash === before.trash ? trash : now.trash,
+      };
+      if (finished) {
+        applyLibrary(set, get, { fonts: finished, ...metadata });
+        return;
+      }
+      set({ ...metadata, ...(warm ? { fonts: warm } : {}), phase: "scanning" });
+      // This command waits for startup or reuses its completed result. Unlike
+      // an event subscription it cannot miss completion during registration,
+      // and a slow scan does not silently expire after thirty seconds.
+      const fonts = await ipc.initialFonts();
+      if (myGen !== scanGen) return;
+      applyLibrary(set, get, {
+        fonts, tags: get().tags, collections: get().collections,
+        favorites: get().favorites, notes: get().notes, trash: get().trash,
+      });
     } catch (e) {
       if (myGen !== scanGen) return;
       set({ phase: "error" });
       toast.error(t("toast.couldntScan"), String(e));
     }
+  },
+
+  rescan: () => {
+    ++scanGen;
+    set({ phase: "scanning" });
+    return scanQueue.request();
   },
 
   setFamilyActive: async (family, active) => {
@@ -683,6 +637,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
       if (result.installed.length > 0) {
         const families = [...new Set(result.installed.map((f) => f.family))];
         set({ fonts: [...get().fonts, ...result.installed], lastImported: families });
+        // Invalidate any older scan and refresh even when the watcher is off
+        // (linked imports can live outside every watched directory).
+        void get().rescan();
         persistPrefs(get);
         toast.success(
           families.length === 1

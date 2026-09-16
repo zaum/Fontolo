@@ -261,7 +261,29 @@ async fn scan_coalesced(app: &tauri::AppHandle) -> Result<FontSnapshot, String> 
 
 #[tauri::command]
 async fn scan_fonts(app: tauri::AppHandle) -> Result<FontSnapshot, String> {
-    scan_coalesced(&app).await
+    // Explicit refreshes must start after the request, not reuse a scan that
+    // may have walked the changed directory before the mutation occurred.
+    let _guard = scan_lock().lock().await;
+    run_scan(&app).await
+}
+
+#[tauri::command]
+async fn initial_fonts(app: tauri::AppHandle) -> Result<FontSnapshot, String> {
+    // Acquiring the startup lock avoids event registration races and arbitrary
+    // timeouts. A completed startup (including an empty library) is reusable.
+    let guard = scan_lock().lock().await;
+    let (snapshot, error) = {
+        let state = scan_state().lock().map_err(|e| e.to_string())?;
+        (state.snapshot.clone(), state.error.clone())
+    };
+    if let Some(error) = error {
+        return Err(error);
+    }
+    if let Some(snapshot) = snapshot {
+        drop(guard);
+        return stamp_active(&app, snapshot).await;
+    }
+    run_scan(&app).await
 }
 
 /// The library recovered from the previous run's on-disk cache. Lets the UI
@@ -861,6 +883,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_fonts,
             peek_fonts,
+            initial_fonts,
             warm_fonts,
             set_font_active,
             set_fonts_active,
