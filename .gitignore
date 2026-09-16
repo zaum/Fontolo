@@ -1,9 +1,27 @@
+# Local / editor notes
 todo.txt
 AGENTS.md
+
+# Build outputs and dependencies
 node_modules/
 dist/
 src-tauri/target/
+
+# Tauri / Vite environment files (may contain secrets)
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# OS / editor metadata
+.DS_Store
+Thumbs.db
+
+# Affinity Designer files (local screenshots)
 screenshots.af
 screenshots.af~lock~
-# Local Windows helper to start the dev version (not part of the app)
+
+# Local Windows dev scripts
 start-dev.bat
