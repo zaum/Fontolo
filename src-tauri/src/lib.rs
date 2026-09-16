@@ -1,5 +1,6 @@
 mod activation;
 mod adobe;
+mod affinity;
 mod font_types;
 mod installer;
 mod parser;
@@ -16,21 +17,49 @@ use tauri::{Manager, State};
 
 #[tauri::command]
 async fn scan_fonts(app: tauri::AppHandle) -> Result<Vec<FontFace>, String> {
-    let extra = {
+    let (extra, library_dir, linked) = {
         let store: State<Store> = app.state();
         let state = store.0.lock().map_err(|e| e.to_string())?;
-        state.extra_dirs.clone()
+        (
+            state.extra_dirs.clone(),
+            state.active_library_dir().map(|s| s.to_owned()),
+            state.linked.clone(),
+        )
     };
-    let faces = tauri::async_runtime::spawn_blocking({
+    let managed = scanner::effective_managed_dir(library_dir.as_deref());
+    let mut faces = tauri::async_runtime::spawn_blocking({
         let app = app.clone();
-        move || scanner::scan_all(&app, &extra)
+        move || scanner::scan_all(&app, &extra, &managed)
     })
     .await
     .map_err(|e| e.to_string())?;
 
+    // Linked fonts live outside the scanned dirs: parse them in place.
+    // A linked file keeps its library (managed) identity over a scanned hit.
+    let mut linked_faces = Vec::new();
+    for path in &linked {
+        let p = std::path::Path::new(path);
+        if !p.is_file() {
+            continue;
+        }
+        linked_faces.extend(parser::parse_font_file(p, FontSource::Managed));
+    }
+    if !linked_faces.is_empty() {
+        let ids: std::collections::HashSet<&str> =
+            linked_faces.iter().map(|f| f.id.as_str()).collect();
+        faces.retain(|f| !ids.contains(f.id.as_str()));
+        faces.extend(linked_faces);
+    }
+
     let probe = activation::probe();
     let store: State<Store> = app.state();
-    let state = store.0.lock().map_err(|e| e.to_string())?;
+    let mut state = store.0.lock().map_err(|e| e.to_string())?;
+    // Drop links whose file is gone.
+    let before = state.linked.len();
+    state.linked.retain(|p| std::path::Path::new(p).is_file());
+    if state.linked.len() != before {
+        let _ = store::save(&state);
+    }
     let mut faces: Vec<FontFace> = faces
         .into_iter()
         .map(|mut f| {
@@ -62,24 +91,60 @@ fn set_font_active(store: State<Store>, path: String, active: bool) -> Result<()
 fn set_fonts_active(store: State<Store>, paths: Vec<String>, active: bool) -> Result<(), String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
 
-    let mut first_err = None;
-    for path in &paths {
-        if let Err(e) = activation::sync(&mut state, path, active) {
-            first_err.get_or_insert(e);
-        }
-    }
-    store::save(&state)?;
-    first_err.map_or(Ok(()), Err)
+    activation::sync_many(&mut state, &paths, active)?;
+    store::save(&state)
 }
 
 #[tauri::command]
 async fn install_fonts(
     app: tauri::AppHandle,
+    store: State<'_, Store>,
     paths: Vec<String>,
+    existing: Vec<String>,
+    mode: String,
 ) -> Result<installer::InstallResult, String> {
-    tauri::async_runtime::spawn_blocking(move || installer::install(&app, paths))
-        .await
-        .map_err(|e| e.to_string())
+    let mode = installer::InstallMode::parse(&mode)?;
+    let library_dir = {
+        let state = store.0.lock().map_err(|e| e.to_string())?;
+        state.active_library_dir().map(|s| s.to_owned())
+    };
+    let library = scanner::effective_managed_dir(library_dir.as_deref());
+    let known: std::collections::HashSet<String> = existing.into_iter().collect();
+    let scope_app = app.clone();
+    let mut result =
+        tauri::async_runtime::spawn_blocking(move || installer::install(&app, paths, &known, mode, &library))
+            .await
+            .map_err(|e| e.to_string())?;
+    // New fonts start deactivated on every OS: run them through the regular
+    // deactivate path so a later toggle can bring them back.
+    // The Settings toggle can opt back into auto-activation for small batches.
+    let mut auto = false;
+    if let Ok(mut state) = store.0.lock() {
+        if mode == installer::InstallMode::Link {
+            for face in &result.installed {
+                state.linked.insert(face.path.clone());
+            }
+        }
+        auto = state.auto_activate_imports && result.installed.len() < 64;
+        // One platform commit for the whole batch (Linux: single fc-cache run).
+        let paths: Vec<String> = result.installed.iter().map(|f| f.path.clone()).collect();
+        let _ = activation::sync_many(&mut state, &paths, auto);
+        let _ = store::save(&state);
+    }
+    // Previews load through the asset protocol: allow the folders new files live in.
+    for face in &result.installed {
+        let p = std::path::Path::new(&face.path);
+        if let Some(parent) = p.parent() {
+            allow_dir(&scope_app, parent);
+        }
+    }
+    // Report the activation state that was actually applied above: with
+    // auto-activation on these fonts are registered already, otherwise they
+    // are deactivated and a later toggle can bring them back.
+    for face in &mut result.installed {
+        face.active = auto;
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -91,6 +156,13 @@ fn uninstall_font(store: State<Store>, path: String, family: String) -> Result<T
             activation::sync(&mut state, &path, true)?;
             store::save(&state)?;
         }
+        if state.linked.contains(&path) {
+            // Linked file: never touch the original, only unregister.
+            let entry = installer::unlink(&path, &family)?;
+            state.linked.remove(&path);
+            store::save(&state)?;
+            return Ok(entry);
+        }
     }
     installer::uninstall(&path, &family)
 }
@@ -101,8 +173,39 @@ fn list_trash() -> Vec<TrashEntry> {
 }
 
 #[tauri::command]
-fn restore_from_trash(entry_id: String) -> Result<(), String> {
-    installer::restore(&entry_id)
+async fn affinity_connection() -> Result<affinity::AffinityConnection, String> {
+    Ok(affinity::connection().await)
+}
+
+#[tauri::command]
+fn affinity_session_activate(
+    store: State<Store>,
+    paths: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let mut state = store.0.lock().map_err(|e| e.to_string())?;
+    let mut activated = Vec::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    for path in &paths {
+        if seen.insert(path.as_str()) {
+            activated.push(path.clone());
+        }
+    }
+    activation::sync_many(&mut state, &activated, true)?;
+    store::save(&state)?;
+    affinity::note_activated(activated.clone());
+    Ok(activated)
+}
+
+#[tauri::command]
+fn restore_from_trash(store: State<Store>, entry_id: String) -> Result<(), String> {
+    match installer::restore(&entry_id)? {
+        installer::RestoreOutcome::Moved => Ok(()),
+        installer::RestoreOutcome::Relinked(path) => {
+            let mut state = store.0.lock().map_err(|e| e.to_string())?;
+            state.linked.insert(path);
+            store::save(&state)
+        }
+    }
 }
 
 #[tauri::command]
@@ -207,7 +310,7 @@ fn set_favorite(store: State<Store>, family: String, favorite: bool) -> Result<(
 
 #[tauri::command]
 fn get_charset(path: String, face_index: u32) -> Result<Vec<u32>, String> {
-    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let (data, _) = parser::read_font_bytes(std::path::Path::new(&path))?;
     let face = ttf_parser::Face::parse(&data, face_index).map_err(|e| e.to_string())?;
     let mut cps: Vec<u32> = Vec::new();
     if let Some(cmap) = face.tables().cmap {
@@ -253,13 +356,21 @@ static SESSION_ACTIVATED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(
 #[tauri::command]
 fn set_fonts_active_session(store: State<Store>, paths: Vec<String>) -> Result<(), String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
-    let mut first_err = None;
-    let mut activated = Vec::with_capacity(paths.len());
-    for path in paths {
-        match activation::sync(&mut state, &path, true) {
-            Ok(()) => activated.push(path),
+    // Best effort: keep every path that applied cleanly in the session list.
+    let mut activated: Vec<String> = Vec::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    for path in &paths {
+        if !seen.insert(path.as_str()) {
+            continue;
+        }
+        match activation::sync(&mut state, path, true) {
+            Ok(()) => activated.push(path.clone()),
             Err(e) => {
-                first_err.get_or_insert(e);
+                store::save(&state)?;
+                if let Ok(mut session) = SESSION_ACTIVATED.lock() {
+                    session.extend(activated);
+                }
+                return Err(e);
             }
         }
     }
@@ -267,7 +378,7 @@ fn set_fonts_active_session(store: State<Store>, paths: Vec<String>) -> Result<(
     if let Ok(mut session) = SESSION_ACTIVATED.lock() {
         session.extend(activated);
     }
-    first_err.map_or(Ok(()), Err)
+    Ok(())
 }
 
 fn revert_session_activations(app: &tauri::AppHandle) {
@@ -284,20 +395,48 @@ fn revert_session_activations(app: &tauri::AppHandle) {
         Ok(g) => g,
         Err(_) => return,
     };
-    for p in &paths {
-        let _ = activation::sync(&mut guard, p, false);
-    }
+    // Single platform commit for the whole session revert.
+    let _ = activation::sync_many(&mut guard, &paths, false);
+    affinity::revert_session(&mut guard);
     let _ = store::save(&guard);
 }
 
 #[tauri::command]
-fn write_binary_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+fn write_binary_file(path: String, data_base64: String) -> Result<(), String> {
+    // Base64 arrives as ~1.37x the file size; a JSON number array would be
+    // ~4x and stall the UI on multi-MB specimen PNGs.
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut rev = [u8::MAX; 256];
+    for (i, &c) in TABLE.iter().enumerate() {
+        rev[c as usize] = i as u8;
+    }
+    let clean: Vec<u8> = data_base64.bytes().filter(|&b| b != b'=' && !b.is_ascii_whitespace()).collect();
+    let mut out: Vec<u8> = Vec::with_capacity(clean.len() * 3 / 4);
+    for chunk in clean.chunks(4) {
+        let mut n: u32 = 0;
+        for &c in chunk {
+            let v = rev[c as usize];
+            if v == u8::MAX {
+                return Err("invalid base64 data".into());
+            }
+            n = (n << 6) | v as u32;
+        }
+        let pad = 4 - chunk.len();
+        n <<= pad * 6;
+        out.push((n >> 16) as u8);
+        if pad < 2 {
+            out.push((n >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(n as u8);
+        }
+    }
+    std::fs::write(&path, out).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_features(path: String, face_index: u32) -> Result<Vec<String>, String> {
-    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let (data, _) = parser::read_font_bytes(std::path::Path::new(&path))?;
     let face = ttf_parser::Face::parse(&data, face_index).map_err(|e| e.to_string())?;
     let mut tags: Vec<String> = Vec::new();
     let mut collect = |table: Option<ttf_parser::opentype_layout::LayoutTable>| {
@@ -335,6 +474,11 @@ fn export_fonts(paths: Vec<String>, dest_dir: String) -> Result<u32, String> {
 struct Settings {
     extra_dirs: Vec<String>,
     watch_enabled: bool,
+    auto_activate_imports: bool,
+    library_dir: Option<String>,
+    library_dir_enabled: bool,
+    affinity_enabled: bool,
+    affinity_deactivate_on_quit: bool,
 }
 
 #[tauri::command]
@@ -343,6 +487,11 @@ fn get_settings(store: State<Store>) -> Result<Settings, String> {
     Ok(Settings {
         extra_dirs: state.extra_dirs.clone(),
         watch_enabled: state.watch_enabled,
+        auto_activate_imports: state.auto_activate_imports,
+        library_dir: state.library_dir.clone(),
+        library_dir_enabled: state.library_dir_enabled,
+        affinity_enabled: state.affinity_enabled,
+        affinity_deactivate_on_quit: state.affinity_deactivate_on_quit,
     })
 }
 
@@ -356,10 +505,34 @@ fn set_settings(
         let mut state = store.0.lock().map_err(|e| e.to_string())?;
         state.extra_dirs = settings.extra_dirs.clone();
         state.watch_enabled = settings.watch_enabled;
+        state.auto_activate_imports = settings.auto_activate_imports;
+        state.library_dir = settings.library_dir.clone();
+        state.library_dir_enabled = settings.library_dir_enabled;
+        state.affinity_enabled = settings.affinity_enabled;
+        state.affinity_deactivate_on_quit = settings.affinity_deactivate_on_quit;
         store::save(&state)?;
     }
+    allow_dir(
+        &app,
+        &scanner::effective_managed_dir(
+            settings
+                .library_dir_enabled
+                .then(|| settings.library_dir.as_deref())
+                .flatten(),
+        ),
+    );
     allow_previews(&app, &settings.extra_dirs);
     apply_watch(&app, settings.watch_enabled, &settings.extra_dirs)
+}
+
+#[tauri::command]
+fn default_library_dir() -> String {
+    scanner::managed_font_dir().to_string_lossy().into_owned()
+}
+
+fn allow_dir(app: &tauri::AppHandle, dir: &std::path::Path) {
+    let dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let _ = app.asset_protocol_scope().allow_directory(&dir, true);
 }
 
 fn allow_previews(app: &tauri::AppHandle, extra: &[String]) {
@@ -396,32 +569,6 @@ fn set_prefs(store: State<Store>, prefs: serde_json::Value) -> Result<(), String
 }
 
 #[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err(format!("refusing to open non-web URL: {url}"));
-    }
-
-    #[cfg(target_os = "linux")]
-    let spawned = std::process::Command::new("xdg-open").arg(&url).spawn();
-
-    #[cfg(target_os = "macos")]
-    let spawned = std::process::Command::new("open").arg(&url).spawn();
-
-    #[cfg(target_os = "windows")]
-    let spawned = {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-    };
-
-    spawned.map(|_| ()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn adobe_available() -> bool {
     adobe::available()
 }
@@ -445,6 +592,8 @@ pub fn run() {
 
     let watch_enabled = state.watch_enabled;
     let extra_dirs = state.extra_dirs.clone();
+    let library_dir = state.active_library_dir().map(|s| s.to_owned());
+    let linked_dirs: Vec<String> = state.linked.iter().cloned().collect();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -454,9 +603,24 @@ pub fn run() {
         .manage(watcher::WatchHandle(std::sync::Mutex::new(None)))
         .setup(move |app| {
             allow_previews(app.handle(), &extra_dirs);
+            allow_dir(
+                app.handle(),
+                &scanner::effective_managed_dir(library_dir.as_deref()),
+            );
+            for path in &linked_dirs {
+                if let Some(parent) = std::path::Path::new(path).parent() {
+                    allow_dir(app.handle(), parent);
+                }
+            }
             if watch_enabled {
                 let _ = apply_watch(app.handle(), true, &extra_dirs);
             }
+            // Affinity watcher: session-activate doc fonts while it runs.
+            let affinity_app = app.handle().clone();
+            std::thread::spawn(move || loop {
+                affinity::tick(&affinity_app);
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -467,6 +631,8 @@ pub fn run() {
             install_fonts,
             uninstall_font,
             list_trash,
+            affinity_connection,
+            affinity_session_activate,
             restore_from_trash,
             delete_trash_entry,
             empty_trash,
@@ -492,7 +658,7 @@ pub fn run() {
             set_prefs,
             get_settings,
             set_settings,
-            open_url,
+            default_library_dir,
             adobe_available,
             apply_font_in_app
         ])

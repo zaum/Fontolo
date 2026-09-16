@@ -44,12 +44,16 @@ export function FontList({ families }: { families: Family[] }) {
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((item) => {
             const fam = families[item.index];
+            const isSelected = selection.includes(fam.name);
             return (
-              <button
+              <div
                 key={item.key}
+                role="row"
+                aria-selected={isSelected}
+                tabIndex={0}
                 data-family={fam.name}
-                className={`list-row ${fam.active ? "" : "row-inactive"} ${
-                  selection.includes(fam.name) ? "row-selected" : ""
+                className={`list-row ${
+                  isSelected ? "row-selected" : ""
                 }`}
                 style={{
                   position: "absolute",
@@ -60,8 +64,23 @@ export function FontList({ families }: { families: Family[] }) {
                   transform: `translateY(${item.start}px)`,
                 }}
                 onClick={(e) => {
+                  // Guard against clicks that were retargeted from the
+                  // toggle pill to the row (element replaced mid-press).
+                  if ((e.target as HTMLElement).closest("button")) return;
                   const st = useFontStore.getState();
 
+                  if (st.comparePicking) {
+                    st.togglePick(fam.name);
+                    return;
+                  }
+                  const mode =
+                    e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
+                  selectWith(fam.name, mode, st.visibleOrder);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  const st = useFontStore.getState();
                   if (st.comparePicking) {
                     st.togglePick(fam.name);
                     return;
@@ -86,7 +105,7 @@ export function FontList({ families }: { families: Family[] }) {
                     label={t(fam.active ? "card.deactivate" : "card.activate", { name: fam.name })}
                   />
                 </span>
-              </button>
+              </div>
             );
           })}
         </div>

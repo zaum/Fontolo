@@ -1,6 +1,7 @@
 use crate::font_types::{Classification, FontFace, FontFormat, FontSource, VariationAxis};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 const FONT_EXTENSIONS: &[&str] = &["ttf", "otf", "ttc", "otc", "woff", "woff2"];
 
@@ -181,6 +182,51 @@ fn fallback_family(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Unknown".to_string())
+}
+
+/// Read one font file once and share the bytes between commands.
+/// `get_charset` / `get_features` used to re-read + re-parse the file on
+/// every DetailPanel selection; a 20 MB CJK font made that visible.
+/// Small LRU: newest entries stay, oldest fall out.
+struct FileCacheEntry {
+    len: u64,
+    mtime: Option<std::time::SystemTime>,
+    data: Vec<u8>,
+}
+
+static FILE_CACHE: std::sync::OnceLock<Mutex<Vec<(PathBuf, FileCacheEntry)>>> =
+    std::sync::OnceLock::new();
+const FILE_CACHE_MAX: usize = 8;
+
+fn file_cache() -> &'static Mutex<Vec<(PathBuf, FileCacheEntry)>> {
+    FILE_CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub fn read_font_bytes(path: &Path) -> Result<(Vec<u8>, u64), String> {
+    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    let len = meta.len();
+    let mtime = meta.modified().ok();
+
+    if let Ok(cache) = file_cache().lock() {
+        if let Some((_, entry)) = cache.iter().find(|(p, _)| p == path) {
+            if entry.len == len && entry.mtime == mtime {
+                return Ok((entry.data.clone(), len));
+            }
+        }
+    }
+
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    if let Ok(mut cache) = file_cache().lock() {
+        cache.retain(|(p, _)| p != path);
+        cache.push((
+            path.to_path_buf(),
+            FileCacheEntry { len, mtime, data: data.clone() },
+        ));
+        while cache.len() > FILE_CACHE_MAX {
+            cache.remove(0);
+        }
+    }
+    Ok((data, len))
 }
 
 pub fn parse_font_file(path: &Path, source: FontSource) -> Vec<FontFace> {

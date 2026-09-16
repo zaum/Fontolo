@@ -3,12 +3,15 @@ import { listen } from "@tauri-apps/api/event";
 import {
   ipc,
   type AdobeApp,
+  type AffinityConnection,
   type AppSettings,
   type Classification,
   type FontFace,
+  type InstallMode,
   type ScanProgress,
   type TrashEntry,
 } from "../lib/ipc";
+import { matchAffinityFonts, type AffinityEvent } from "../lib/affinity";
 import { toast } from "../design/primitives/Toast";
 import { setSoundLevel, type SoundLevel } from "../lib/sound";
 import { applyTheme, type ThemePref } from "../lib/theme";
@@ -23,6 +26,16 @@ import {
 
 export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96] as const;
 
+// init() subscribes to backend events; React StrictMode runs the mounting
+// effect twice in dev, so guard it — a second run would attach every
+// listener twice and each toast would appear twice.
+let initStarted = false;
+
+// Every rescan gets a sequence number. A slow scan that started before a
+// newer delete/restore must not overwrite the fresher state when it lands
+// (that is what briefly put deleted fonts back into the list).
+let scanGen = 0;
+
 export type ViewMode = "grid" | "list" | "waterfall";
 export type MotionPref = "system" | "reduced";
 export type SortMode = "name" | "styles" | "size";
@@ -32,7 +45,12 @@ export type Nav =
   | { kind: "about" }
   | { kind: "tag"; tag: string }
   | { kind: "collection"; name: string }
-  | { kind: "favorites" };
+  | { kind: "favorites" }
+  | { kind: "activated" }
+  | { kind: "activatedSession" }
+  | { kind: "deactivated" }
+  | { kind: "system" }
+  | { kind: "lastImported" };
 
 export interface Family {
   name: string;
@@ -55,6 +73,8 @@ interface FontStore {
   tags: Record<string, string[]>;
   collections: Record<string, string[]>;
   favorites: string[];
+  sessionActivated: string[];
+  lastImported: string[];
   notes: Record<string, string>;
   trash: TrashEntry[];
   panelWidth: number;
@@ -70,6 +90,7 @@ interface FontStore {
   helpOpen: boolean;
   paletteOpen: boolean;
   settings: AppSettings;
+  affinityConnection: AffinityConnection | null;
 
   adobeAvailable: boolean;
   motionPref: MotionPref;
@@ -98,11 +119,15 @@ interface FontStore {
 
   pendingCollectionFor: string | null;
 
+  duplicateReport: { names: string[]; at: number } | null;
+
   init: () => Promise<void>;
   rescan: () => Promise<void>;
   setFamilyActive: (family: string, active: boolean) => Promise<void>;
   activateFamilySession: (family: string) => Promise<void>;
-  installPaths: (paths: string[]) => Promise<void>;
+  setFontFileActive: (path: string, active: boolean) => Promise<void>;
+  uninstallFontFile: (path: string) => Promise<void>;
+  installPaths: (paths: string[], mode: InstallMode) => Promise<void>;
   uninstallFamily: (family: string) => Promise<void>;
   restoreTrash: (entryId: string) => Promise<void>;
   deleteTrashEntry: (entryId: string) => Promise<void>;
@@ -113,11 +138,13 @@ interface FontStore {
   renameCollection: (from: string, to: string) => Promise<void>;
   toggleFamilyInCollection: (collection: string, family: string) => Promise<void>;
   toggleFavorite: (family: string) => Promise<void>;
+  favoriteMany: (families: string[]) => Promise<void>;
   setFamilyNote: (family: string, note: string) => Promise<void>;
   setFamiliesActiveBulk: (families: string[], active: boolean) => Promise<void>;
   applyFamilyInApp: (family: string, app: AdobeApp) => Promise<void>;
   setPanelWidth: (w: number) => void;
   selectWith: (family: string, mode: "single" | "toggle" | "range", order: string[]) => void;
+  selectAllVisible: () => void;
   openCompare: (families: string[]) => void;
   closeCompare: () => void;
   setComparePicking: (on: boolean) => void;
@@ -126,6 +153,7 @@ interface FontStore {
   setHelpOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
   updateSettings: (settings: AppSettings) => Promise<void>;
+  refreshAffinityConnection: () => Promise<void>;
   setMotionPref: (pref: MotionPref) => void;
   setSoundPref: (pref: SoundLevel) => void;
   setThemePref: (pref: ThemePref) => void;
@@ -135,6 +163,8 @@ interface FontStore {
   endTour: () => void;
   setBulkTagFor: (families: string[] | null) => void;
   applyTagToFamilies: (tag: string, families: string[]) => Promise<void>;
+  toggleTagForFamily: (tag: string, family: string) => Promise<void>;
+  setDuplicateReport: (r: { names: string[]; at: number } | null) => void;
 
   setSampleText: (t: string) => void;
   setSizeIndex: (i: number) => void;
@@ -170,6 +200,7 @@ function persistPrefs(get: () => FontStore) {
       themePref: s.themePref,
       localePref: s.localePref,
       onboarded: s.onboarded,
+      lastImported: s.lastImported,
     });
   }, 600);
 }
@@ -181,6 +212,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
   tags: {},
   collections: {},
   favorites: [],
+  sessionActivated: [],
+  lastImported: [],
   notes: {},
   trash: [],
   panelWidth: 348,
@@ -191,7 +224,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
   settingsOpen: false,
   helpOpen: false,
   paletteOpen: false,
-  settings: { extraDirs: [], watchEnabled: false },
+  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true },
+  affinityConnection: null,
   adobeAvailable: false,
   motionPref: "system",
   soundPref: "off",
@@ -212,8 +246,11 @@ export const useFontStore = create<FontStore>((set, get) => ({
   nav: { kind: "library" },
   selectedFamily: null,
   pendingCollectionFor: null,
+  duplicateReport: null,
 
   init: async () => {
+    if (initStarted) return;
+    initStarted = true;
     await listen<ScanProgress>("scan:progress", (e) => {
       set({ scanProgress: e.payload });
     });
@@ -243,6 +280,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
           : "dark",
         onboarded: prefs.onboarded === true,
         localePref: isLocalePref(prefs.localePref) ? prefs.localePref : get().localePref,
+        lastImported: Array.isArray(prefs.lastImported)
+          ? (prefs.lastImported as unknown[]).filter((n): n is string => typeof n === "string")
+          : [],
       });
       setSoundLevel(get().soundPref);
       hydrateLocalePref(get().localePref);
@@ -283,10 +323,41 @@ export const useFontStore = create<FontStore>((set, get) => ({
           });
       }, 1500);
     });
+    await listen<AffinityEvent>("affinity:event", (e) => {
+      const evt = e.payload;
+      if (evt.kind === "needs") {
+        const paths = matchAffinityFonts(
+          get().fonts,
+          evt.docs.flatMap((d) => d.fonts),
+        );
+        if (paths.length === 0) return;
+        void (async () => {
+          try {
+            const activated = await ipc.affinitySessionActivate(paths);
+            if (activated.length === 0) return;
+            const titles = [...new Set(evt.docs.map((d) => d.title))].join(", ");
+            toast.success(
+              t("toast.affinityActivated", { count: activated.length, docs: titles }),
+              undefined,
+              "activate",
+            );
+            await get().rescan();
+          } catch (err) {
+            toast.error(t("toast.affinityError"), String(err));
+          }
+        })();
+      } else if (evt.kind === "deactivated") {
+        toast.success(t("toast.affinityDeactivated"), undefined, "activate");
+        void get().rescan();
+      } else if (evt.kind === "error") {
+        toast.error(t("toast.affinityError"), evt.message ?? "");
+      }
+    });
     await get().rescan();
   },
 
   rescan: async () => {
+    const myGen = ++scanGen;
     set({ phase: "scanning" });
     try {
       const [fonts, tags, collections, favorites, notes, trash] = await Promise.all([
@@ -297,8 +368,18 @@ export const useFontStore = create<FontStore>((set, get) => ({
         ipc.getNotes(),
         ipc.listTrash(),
       ]);
+      if (myGen !== scanGen) return;
       set({ fonts, tags, collections, favorites, notes, trash, phase: "ready" });
+      // Drop last-imported entries that no longer exist.
+      const names = new Set(fonts.map((f) => f.family));
+      const keptImported = get().lastImported.filter((n) => names.has(n));
+      if (keptImported.length !== get().lastImported.length) set({ lastImported: keptImported });
+      // Drop session entries that no longer exist or are no longer active.
+      const alive = new Set(fonts.filter((f) => f.active).map((f) => f.family));
+      const kept = get().sessionActivated.filter((n) => alive.has(n));
+      if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
     } catch (e) {
+      if (myGen !== scanGen) return;
       set({ phase: "error" });
       toast.error(t("toast.couldntScan"), String(e));
     }
@@ -309,18 +390,20 @@ export const useFontStore = create<FontStore>((set, get) => ({
     const paths = [...new Set(faces.map((f) => f.path))];
     if (paths.length === 0) return;
 
+    const prevSession = get().sessionActivated;
+    const prevFonts = get().fonts;
     set({
-      fonts: get().fonts.map((f) =>
+      fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active } : f,
       ),
+      sessionActivated: prevSession.filter((n) => n !== family),
     });
     try {
       await ipc.setFontsActive(paths, active);
     } catch (e) {
       set({
-        fonts: get().fonts.map((f) =>
-          f.family === family && f.deactivatable ? { ...f, active: !active } : f,
-        ),
+        fonts: prevFonts,
+        sessionActivated: prevSession,
       });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
     }
@@ -330,13 +413,15 @@ export const useFontStore = create<FontStore>((set, get) => ({
     const faces = get().fonts.filter((f) => f.family === family && f.deactivatable);
     const paths = [...new Set(faces.map((f) => f.path))];
     if (paths.length === 0) return;
+    const prevFonts = get().fonts;
     set({
-      fonts: get().fonts.map((f) =>
+      fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active: true } : f,
       ),
     });
     try {
       await ipc.setFontsActiveSession(paths);
+      set({ sessionActivated: [...new Set([...get().sessionActivated, family])] });
       toast.success(
         t("toast.activeUntilClose", { family }),
         t("toast.activeUntilCloseSub"),
@@ -344,20 +429,107 @@ export const useFontStore = create<FontStore>((set, get) => ({
       );
     } catch (e) {
       set({
-        fonts: get().fonts.map((f) =>
-          f.family === family && f.deactivatable ? { ...f, active: false } : f,
-        ),
+        fonts: prevFonts,
       });
       toast.error(t("toast.couldntActivate"), String(e));
     }
   },
 
-  installPaths: async (paths) => {
+  setFontFileActive: async (path, active) => {
+    const faces = get().fonts.filter((f) => f.path === path);
+    if (faces.length === 0) return;
+    // System files are protected: never deactivate or remove them from here.
+    if (faces.every((f) => f.source === "system")) {
+      toast.error(t("toast.cantUninstallSystem"), t("toast.cantUninstallSystemSub"));
+      return;
+    }
+    const targets = faces.filter((f) => f.deactivatable);
+    if (targets.length === 0) return;
+    const prevFonts = get().fonts;
+    set({
+      fonts: prevFonts.map((f) =>
+        f.path === path && f.deactivatable ? { ...f, active } : f,
+      ),
+    });
     try {
-      const result = await ipc.installFonts(paths);
+      await ipc.setFontsActive([path], active);
+    } catch (e) {
+      set({ fonts: prevFonts });
+      toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
+    }
+  },
+
+  uninstallFontFile: async (path) => {
+    const faces = get().fonts.filter((f) => f.path === path);
+    if (faces.length === 0) return;
+    // System files are protected: they cannot be moved to trash.
+    if (faces.some((f) => f.source === "system")) {
+      toast.error(t("toast.cantUninstallSystem"), t("toast.cantUninstallSystemSub"));
+      return;
+    }
+    const family = faces[0].family;
+    try {
+      const entry = await ipc.uninstallFont(path, family);
+      const remaining = get().fonts.filter((f) => f.path !== path);
+      const familyAlive = remaining.some((f) => f.family === family);
+      set({
+        fonts: remaining,
+        trash: await ipc.listTrash(),
+        selectedFamily: !familyAlive && get().selectedFamily === family ? null : get().selectedFamily,
+        selection: !familyAlive ? get().selection.filter((f) => f !== family) : get().selection,
+        lastImported: !familyAlive
+          ? get().lastImported.filter((f) => f !== family)
+          : get().lastImported,
+      });
+      // Converge to the backend truth: a watcher-triggered scan that started
+      // before this delete must not put the file back into the list.
+      await get().rescan();
+
+      if (!familyAlive) {
+        const { tags, favorites, collections } = get();
+        if (tags[family]) void get().setFamilyTags(family, []);
+        if (favorites.includes(family)) void get().toggleFavorite(family);
+        for (const [name, members] of Object.entries(collections)) {
+          if (members.includes(family)) {
+            const next = members.filter((m) => m !== family);
+            set({ collections: { ...get().collections, [name]: next } });
+            void ipc.setCollection(name, next);
+          }
+        }
+      }
+      toast.success(t("toast.movedToTrash", { family }), t("toast.movedToTrashSub"), "trash", {
+        label: t("toast.undo"),
+        run: () => {
+          void (async () => {
+            try {
+              await ipc.restoreFromTrash(entry.id);
+              set({ trash: await ipc.listTrash() });
+              await get().rescan();
+              toast.success(t("toast.restoredFamily", { family }), undefined, "restore");
+            } catch (e) {
+              toast.error(t("toast.couldntRestore"), String(e));
+            }
+          })();
+        },
+      });
+    } catch (e) {
+      toast.error(t("toast.couldntMoveToTrash"), String(e));
+      // The backend may have moved the file before failing (or a watcher
+      // scan may hold stale data): re-read so list and trash agree.
+      await get().rescan();
+    }
+  },
+
+  installPaths: async (paths, mode) => {
+    try {
+      const dupKeyOf = (f: { postscriptName: string | null; family: string; style: string }) =>
+        f.postscriptName ?? `${f.family} ${f.style}`;
+      const existing = get().fonts.map(dupKeyOf);
+      const result = await ipc.installFonts(paths, existing, mode);
       if (result.installed.length > 0) {
-        set({ fonts: [...get().fonts, ...result.installed] });
         const families = [...new Set(result.installed.map((f) => f.family))];
+        set({ fonts: [...get().fonts, ...result.installed], lastImported: families });
+        persistPrefs(get);
         toast.success(
           families.length === 1
             ? t("toast.installedOne", { name: families[0] })
@@ -367,8 +539,17 @@ export const useFontStore = create<FontStore>((set, get) => ({
         );
       }
       for (const err of result.errors) toast.error(t("toast.installFailed"), err);
-      if (result.installed.length === 0 && result.errors.length === 0) {
+      if (
+        result.installed.length === 0 &&
+        result.errors.length === 0 &&
+        result.duplicates.length === 0
+      ) {
         toast.error(t("toast.nothingToInstall"), t("toast.nothingToInstallSub"));
+      }
+      if (result.duplicates.length > 0) {
+        set({
+          duplicateReport: { names: [...result.duplicates], at: Date.now() },
+        });
       }
     } catch (e) {
       toast.error(t("toast.installFailed"), String(e));
@@ -385,26 +566,55 @@ export const useFontStore = create<FontStore>((set, get) => ({
     }
     const paths = [...new Set(faces.map((f) => f.path))];
     try {
+      // Move files one by one: a locked file must not silently cancel the
+      // rest of the family, nor leave moved files out of the UI update.
       const entryIds: string[] = [];
+      const movedPaths: string[] = [];
+      const failed: string[] = [];
       for (const path of paths) {
-        entryIds.push((await ipc.uninstallFont(path, family)).id);
-      }
-      set({
-        fonts: get().fonts.filter((f) => !paths.includes(f.path)),
-        trash: await ipc.listTrash(),
-        selectedFamily: get().selectedFamily === family ? null : get().selectedFamily,
-        selection: get().selection.filter((f) => f !== family),
-      });
-
-      const { tags, favorites, collections } = get();
-      if (tags[family]) void get().setFamilyTags(family, []);
-      if (favorites.includes(family)) void get().toggleFavorite(family);
-      for (const [name, members] of Object.entries(collections)) {
-        if (members.includes(family)) {
-          const next = members.filter((m) => m !== family);
-          set({ collections: { ...get().collections, [name]: next } });
-          void ipc.setCollection(name, next);
+        try {
+          entryIds.push((await ipc.uninstallFont(path, family)).id);
+          movedPaths.push(path);
+        } catch (e) {
+          failed.push(`${path}: ${String(e)}`);
         }
+      }
+      if (movedPaths.length === 0) {
+        toast.error(t("toast.couldntMoveToTrash"), failed.join("\n"));
+        await get().rescan();
+        return;
+      }
+      const remaining = get().fonts.filter((f) => !movedPaths.includes(f.path));
+      const familyAlive = remaining.some((f) => f.family === family);
+      set({
+        fonts: remaining,
+        trash: await ipc.listTrash(),
+        selectedFamily:
+          !familyAlive && get().selectedFamily === family ? null : get().selectedFamily,
+        selection: !familyAlive
+          ? get().selection.filter((f) => f !== family)
+          : get().selection,
+        lastImported: !familyAlive
+          ? get().lastImported.filter((f) => f !== family)
+          : get().lastImported,
+      });
+      // Converge to the backend truth (see uninstallFontFile).
+      await get().rescan();
+
+      if (!familyAlive) {
+        const { tags, favorites, collections } = get();
+        if (tags[family]) void get().setFamilyTags(family, []);
+        if (favorites.includes(family)) void get().toggleFavorite(family);
+        for (const [name, members] of Object.entries(collections)) {
+          if (members.includes(family)) {
+            const next = members.filter((m) => m !== family);
+            set({ collections: { ...get().collections, [name]: next } });
+            void ipc.setCollection(name, next);
+          }
+        }
+      }
+      if (failed.length > 0) {
+        toast.error(t("toast.couldntMoveToTrash"), failed.join("\n"));
       }
       toast.success(t("toast.movedToTrash", { family }), t("toast.movedToTrashSub"), "trash", {
         label: t("toast.undo"),
@@ -423,6 +633,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       });
     } catch (e) {
       toast.error(t("toast.couldntMoveToTrash"), String(e));
+      await get().rescan();
     }
   },
 
@@ -566,6 +777,19 @@ export const useFontStore = create<FontStore>((set, get) => ({
     }
   },
 
+  favoriteMany: async (families) => {
+    const prev = get().favorites;
+    const missing = families.filter((f) => !prev.includes(f));
+    if (missing.length === 0) return;
+    set({ favorites: [...prev, ...missing] });
+    try {
+      for (const f of missing) await ipc.setFavorite(f, true);
+    } catch (e) {
+      set({ favorites: prev });
+      toast.error(t("toast.couldntUpdateFavorites"), String(e));
+    }
+  },
+
   setFamilyNote: async (family, note) => {
     const prev = get().notes;
     const next = { ...prev };
@@ -590,10 +814,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
     ];
     if (paths.length === 0) return;
     const prevFonts = get().fonts;
+    const prevSession = get().sessionActivated;
     set({
       fonts: prevFonts.map((f) =>
         families.includes(f.family) && f.deactivatable ? { ...f, active } : f,
       ),
+      sessionActivated: prevSession.filter((n) => !families.includes(n)),
     });
     try {
       await ipc.setFontsActive(paths, active);
@@ -606,7 +832,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         { label: t("toast.undo"), run: () => void get().setFamiliesActiveBulk(families, !active) },
       );
     } catch (e) {
-      set({ fonts: prevFonts });
+      set({ fonts: prevFonts, sessionActivated: prevSession });
       toast.error(t("toast.bulkUpdateFailed"), String(e));
     }
   },
@@ -661,6 +887,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
 
   selectWith: (family, mode, order) => {
     const { selection, selectedFamily } = get();
+    if (mode === "single" && selectedFamily === family && selection.length <= 1) {
+      set({ selection: [], selectedFamily: null });
+      return;
+    }
     if (mode === "toggle") {
       const next = selection.includes(family)
         ? selection.filter((f) => f !== family)
@@ -678,6 +908,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
       }
     }
     set({ selection: [family], selectedFamily: family });
+  },
+
+  selectAllVisible: () => {
+    const order = get().visibleOrder;
+    if (order.length === 0) return;
+    set({ selection: [...order], selectedFamily: order[order.length - 1] });
   },
 
   openCompare: (families) => set({ compare: families.slice(0, 4), comparePicking: false }),
@@ -707,7 +943,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
 
     const dirsChanged =
       prev.extraDirs.length !== settings.extraDirs.length ||
-      prev.extraDirs.some((d, i) => d !== settings.extraDirs[i]);
+      prev.extraDirs.some((d, i) => d !== settings.extraDirs[i]) ||
+      prev.libraryDir !== settings.libraryDir ||
+      prev.libraryDirEnabled !== settings.libraryDirEnabled;
     if (!dirsChanged || get().phase === "scanning") return;
     const before = get().fonts.length;
     await get().rescan();
@@ -724,6 +962,16 @@ export const useFontStore = create<FontStore>((set, get) => ({
             ? t("toast.noFontsInFolder")
             : t("toast.libraryUnchanged"),
     );
+  },
+
+  refreshAffinityConnection: async () => {
+    try {
+      set({ affinityConnection: await ipc.affinityConnection() });
+    } catch {
+      set({
+        affinityConnection: { reachable: false, version: null, docCount: 0, error: null },
+      });
+    }
   },
 
   setMotionPref: (motionPref) => {
@@ -773,6 +1021,16 @@ export const useFontStore = create<FontStore>((set, get) => ({
       if (next !== current) await get().setFamilyTags(family, next);
     }
   },
+
+  toggleTagForFamily: async (tag, family) => {
+    const current = get().tags[family] ?? [];
+    const next = current.includes(tag)
+      ? current.filter((t) => t !== tag)
+      : [...current, tag];
+    await get().setFamilyTags(family, next);
+  },
+
+  setDuplicateReport: (duplicateReport) => set({ duplicateReport }),
 
   setPanelWidth: (panelWidth) => {
     set({ panelWidth: Math.min(560, Math.max(300, panelWidth)) });
@@ -941,6 +1199,8 @@ export function selectVisibleFamilies(s: {
   tags: Record<string, string[]>;
   collections: Record<string, string[]>;
   favorites: string[];
+  sessionActivated: string[];
+  lastImported: string[];
   notes: Record<string, string>;
   search: string;
   classFilter: Classification[];
@@ -971,6 +1231,26 @@ export function selectVisibleFamilies(s: {
   }
   if (s.nav.kind === "favorites") {
     out = out.filter((f) => s.favorites.includes(f.name));
+  }
+  if (s.nav.kind === "lastImported") {
+    out = out.filter((f) => s.lastImported.includes(f.name));
+  }
+  if (s.nav.kind === "activated") {
+    out = out.filter(
+      (f) =>
+        f.active &&
+        !s.sessionActivated.includes(f.name) &&
+        !(f.faces.length > 0 && f.faces.every((face) => face.source === "system")),
+    );
+  }
+  if (s.nav.kind === "activatedSession") {
+    out = out.filter((f) => s.sessionActivated.includes(f.name));
+  }
+  if (s.nav.kind === "deactivated") {
+    out = out.filter((f) => !f.active);
+  }
+  if (s.nav.kind === "system") {
+    out = out.filter((f) => f.faces.length > 0 && f.faces.every((face) => face.source === "system"));
   }
   if (q) {
     out = out.filter(
@@ -1028,6 +1308,18 @@ export function familiesFor(
 }
 
 const conflictCache = new WeakMap<FontFace[], Map<string, FontConflict[]>>();
+
+const activeConflictCache = new WeakMap<FontFace[], Map<string, FontConflict[]>>();
+
+/** Conflicts among ACTIVE fonts only: these are the ones apps can actually see. */
+export function activeConflictsFor(fonts: FontFace[]): Map<string, FontConflict[]> {
+  let cached = activeConflictCache.get(fonts);
+  if (!cached) {
+    cached = computeConflicts(fonts.filter((f) => f.active));
+    activeConflictCache.set(fonts, cached);
+  }
+  return cached;
+}
 
 export function conflictsFor(fonts: FontFace[]): Map<string, FontConflict[]> {
   let cached = conflictCache.get(fonts);

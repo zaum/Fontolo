@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MotionConfig, motion } from "motion/react";
-import { FolderOpen, SearchX, Star, Tag as TagIcon, Type } from "lucide-react";
+import { Clock, FolderOpen, History, Monitor, Power, PowerOff, SearchX, Star, Tag as TagIcon, Type } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { DetailPanel } from "./components/DetailPanel";
 import { Titlebar } from "./components/Titlebar";
@@ -18,6 +18,7 @@ import { SettingsOverlay } from "./components/SettingsOverlay";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { CommandPalette } from "./components/CommandPalette";
 import { BulkTagPrompt } from "./components/BulkTagPrompt";
+import { DuplicateDialog } from "./components/DuplicateDialog";
 import { Onboarding } from "./components/Onboarding";
 import { ContextMenuHost, openContextMenuAt } from "./design/primitives/ContextMenu";
 import { buildFamilyMenu } from "./lib/menus";
@@ -55,6 +56,10 @@ function EmptyLibrary({ searching, nav }: { searching: boolean; nav: Nav }) {
     icon = <Star size={26} strokeWidth={1.5} />;
     title = t("empty.favorites.title");
     hint = t("empty.favorites.body");
+  } else if (nav.kind === "lastImported") {
+    icon = <History size={26} strokeWidth={1.5} />;
+    title = t("empty.lastImported.title");
+    hint = t("empty.lastImported.body");
   } else if (nav.kind === "collection") {
     icon = <FolderOpen size={26} strokeWidth={1.5} />;
     title = t("empty.collection.title");
@@ -63,6 +68,22 @@ function EmptyLibrary({ searching, nav }: { searching: boolean; nav: Nav }) {
     icon = <TagIcon size={26} strokeWidth={1.5} />;
     title = t("empty.tag.title");
     hint = t("empty.tag.body");
+  } else if (nav.kind === "activated") {
+    icon = <Power size={26} strokeWidth={1.5} />;
+    title = t("empty.activated.title");
+    hint = t("empty.activated.body");
+  } else if (nav.kind === "activatedSession") {
+    icon = <Clock size={26} strokeWidth={1.5} />;
+    title = t("empty.session.title");
+    hint = t("empty.session.body");
+  } else if (nav.kind === "deactivated") {
+    icon = <PowerOff size={26} strokeWidth={1.5} />;
+    title = t("empty.deactivated.title");
+    hint = t("empty.deactivated.body");
+  } else if (nav.kind === "system") {
+    icon = <Monitor size={26} strokeWidth={1.5} />;
+    title = t("empty.system.title");
+    hint = t("empty.system.body");
   }
   return (
     <motion.div
@@ -86,6 +107,8 @@ function MainContent() {
   const tags = useFontStore((s) => s.tags);
   const collections = useFontStore((s) => s.collections);
   const favorites = useFontStore((s) => s.favorites);
+  const sessionActivated = useFontStore((s) => s.sessionActivated);
+  const lastImported = useFontStore((s) => s.lastImported);
   const notes = useFontStore((s) => s.notes);
   const search = useFontStore((s) => s.search);
   const classFilter = useFontStore((s) => s.classFilter);
@@ -96,15 +119,17 @@ function MainContent() {
   const families = useMemo(
     () =>
       selectVisibleFamilies({
-        fonts, tags, collections, favorites, notes, search,
+        fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search,
         classFilter, scriptFilter, variableOnly, nav, sort,
       }),
-    [fonts, tags, collections, favorites, notes, search, classFilter, scriptFilter, variableOnly, nav, sort],
+    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, nav, sort],
   );
 
+  const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);
+
   useEffect(() => {
-    useFontStore.setState({ visibleOrder: families.map((f) => f.name) });
-  }, [families]);
+    useFontStore.setState({ visibleOrder });
+  }, [visibleOrder]);
 
   if (nav.kind === "trash") return <TrashView />;
   if (nav.kind === "about") return <AboutView />;
@@ -190,6 +215,15 @@ export default function App() {
         }
       }
 
+      if ((e.key === "a" || e.key === "A") && !inField && (e.ctrlKey || e.metaKey)) {
+        const st = useFontStore.getState();
+        if (st.compare || st.settingsOpen || st.helpOpen || st.paletteOpen) return;
+        if (st.viewMode !== "grid" && st.viewMode !== "list") return;
+        if (st.visibleOrder.length === 0) return;
+        e.preventDefault();
+        st.selectAllVisible();
+      }
+
       if ((e.key === "c" || e.key === "C") && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const st = useFontStore.getState();
         if (st.compare || st.settingsOpen || st.helpOpen || st.selection.length < 2) return;
@@ -257,6 +291,7 @@ export default function App() {
       <BulkTagPrompt />
       <Onboarding />
       <ContextMenuHost />
+      <DuplicateDialog />
       <Toaster />
     </MotionConfig>
   );

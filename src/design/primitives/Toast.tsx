@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Info, XCircle } from "lucide-react";
 import { create } from "zustand";
 import { springBouncy } from "../springs";
 import { playError, playKind } from "../../lib/sound";
 
-type Kind = "success" | "error";
+type Kind = "success" | "error" | "info";
 
 interface ToastAction {
   label: string;
@@ -28,16 +28,32 @@ interface ToastStore {
 }
 
 let nextId = 1;
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
+interface TimerEntry {
+  handle: ReturnType<typeof setTimeout>;
+  endsAt: number;
+  remaining: number;
+}
+const timers = new Map<number, TimerEntry>();
 
-function arm(id: number, ms: number, dismiss: (id: number) => void) {
-  clearTimeout(timers.get(id));
+function durationFor(kind: Kind, hasAction: boolean): number {
+  if (kind === "error") return 7000;
+  if (hasAction) return 6500;
+  return 4000;
+}
+
+function arm(id: number, remaining: number, dismiss: (id: number) => void) {
+  const prev = timers.get(id);
+  if (prev) clearTimeout(prev.handle);
   timers.set(
     id,
-    setTimeout(() => {
-      timers.delete(id);
-      dismiss(id);
-    }, ms),
+    {
+      handle: setTimeout(() => {
+        timers.delete(id);
+        dismiss(id);
+      }, remaining),
+      endsAt: Date.now() + remaining,
+      remaining,
+    },
   );
 }
 
@@ -49,16 +65,30 @@ const useToastStore = create<ToastStore>((set, get) => ({
     const id = nextId++;
     set({ toasts: [...get().toasts, { id, kind, title, detail, action }] });
 
-    arm(id, kind === "error" ? 7000 : action ? 6500 : 4000, get().dismiss);
+    arm(id, durationFor(kind, Boolean(action)), get().dismiss);
   },
   dismiss: (id) => {
-    clearTimeout(timers.get(id));
+    const entry = timers.get(id);
+    if (entry) clearTimeout(entry.handle);
     timers.delete(id);
     set({ toasts: get().toasts.filter((t) => t.id !== id) });
   },
 
-  pause: (id) => clearTimeout(timers.get(id)),
-  resume: (id) => arm(id, 1600, get().dismiss),
+  pause: (id) => {
+    const entry = timers.get(id);
+    if (!entry) return;
+    clearTimeout(entry.handle);
+    entry.remaining = Math.max(0, entry.endsAt - Date.now());
+  },
+  resume: (id) => {
+    const entry = timers.get(id);
+    if (!entry) return;
+    if (!get().toasts.some((t) => t.id === id)) {
+      timers.delete(id);
+      return;
+    }
+    arm(id, entry.remaining, get().dismiss);
+  },
 }));
 
 export const toast = {
@@ -67,6 +97,8 @@ export const toast = {
     useToastStore.getState().push("success", title, detail, sound, action),
   error: (title: string, detail?: string) =>
     useToastStore.getState().push("error", title, detail),
+  info: (title: string, detail?: string) =>
+    useToastStore.getState().push("info", title, detail),
 };
 
 export function Toaster() {
@@ -97,8 +129,10 @@ export function Toaster() {
           >
             {t.kind === "success" ? (
               <CheckCircle2 size={16} strokeWidth={2} className="toast-icon success" />
-            ) : (
+            ) : t.kind === "error" ? (
               <XCircle size={16} strokeWidth={2} className="toast-icon error" />
+            ) : (
+              <Info size={16} strokeWidth={2} className="toast-icon info" />
             )}
             <span>
               <span className="toast-title">{t.title}</span>

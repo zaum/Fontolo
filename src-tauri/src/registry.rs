@@ -107,6 +107,49 @@ pub fn user_entries() -> Vec<(String, String)> {
     entries(HKEY_CURRENT_USER)
 }
 
+/// One snapshot of the user font registry, shared by a whole batch.
+/// Every bulk activation used to re-enumerate the registry 2-3 times *per
+/// font*; this reads it once and answers the same questions from memory.
+#[derive(Clone, Default)]
+pub struct UserSnapshot {
+    entries: Vec<(String, String)>,
+}
+
+impl UserSnapshot {
+    pub fn load() -> Self {
+        Self { entries: user_entries() }
+    }
+
+    pub fn names_for(&self, path: &str) -> Vec<String> {
+        let wanted = normalize(path);
+        self.entries
+            .iter()
+            .filter(|(_, p)| normalize(p) == wanted)
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
+
+    pub fn unique_name(&self, base: &str, path: &str) -> String {
+        let wanted = normalize(path);
+        let taken = |name: &str| {
+            self.entries
+                .iter()
+                .any(|(n, p)| n.eq_ignore_ascii_case(name) && normalize(p) != wanted)
+        };
+        if !taken(base) {
+            return base.to_string();
+        }
+        let (stem, suffix) = match base.rfind(" (") {
+            Some(at) => (&base[..at], &base[at..]),
+            None => (base, ""),
+        };
+        (2..)
+            .map(|n| format!("{stem} ({n}){suffix}"))
+            .find(|candidate| !taken(candidate))
+            .unwrap_or_else(|| base.to_string())
+    }
+}
+
 pub fn registered_paths() -> HashSet<String> {
     entries(HKEY_LOCAL_MACHINE)
         .into_iter()
@@ -161,15 +204,11 @@ pub fn delete_user_entry(name: &str) -> Result<(), String> {
     }
 }
 
-pub fn value_name_for(path: &str) -> String {
-    let p = Path::new(path);
+pub fn value_name_for_data(data: &[u8], path: &Path) -> String {
     let fallback = || {
-        p.file_stem()
+        path.file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Font".to_string())
-    };
-    let Ok(data) = std::fs::read(p) else {
-        return format!("{} (TrueType)", fallback());
     };
     let flavour = if data.starts_with(b"OTTO") { "OpenType" } else { "TrueType" };
     let count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
@@ -203,6 +242,23 @@ pub fn value_name_for(path: &str) -> String {
     }
     let base = if names.is_empty() { fallback() } else { names.join(" & ") };
     format!("{base} ({flavour})")
+}
+
+/// Legacy single-path helper: reads the file, then delegates to
+/// [`value_name_for_data`]. Batch code should read once (it usually already
+/// has the bytes via `parser::read_font_bytes`) and call that directly.
+pub fn value_name_for(path: &str) -> String {
+    let p = Path::new(path);
+    match std::fs::read(p) {
+        Ok(data) => value_name_for_data(&data, p),
+        Err(_) => {
+            let fallback = p
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Font".to_string());
+            format!("{fallback} (TrueType)")
+        }
+    }
 }
 
 pub fn unique_user_name(base: &str, path: &str) -> String {

@@ -226,7 +226,21 @@ function AxisSliders({
 }
 
 const charsetCache = new Map<string, number[]>();
+// Cap memory: one CJK face can hold 4096 codepoints; scrolling a big
+// library would otherwise grow this map without bound.
+const CHARSET_CACHE_MAX = 200;
 const GLYPH_LIMIT = 512;
+const GLYPH_PAGE = 512;
+
+function charsetSet(id: string, list: number[]) {
+  charsetCache.delete(id);
+  charsetCache.set(id, list);
+  while (charsetCache.size > CHARSET_CACHE_MAX) {
+    const oldest = charsetCache.keys().next().value;
+    if (oldest === undefined) break;
+    charsetCache.delete(oldest);
+  }
+}
 
 function GlyphMap({
   face,
@@ -239,9 +253,10 @@ function GlyphMap({
 }) {
   const t = useT();
   const [cps, setCps] = useState<number[] | null>(charsetCache.get(face.id) ?? null);
-  const [showAll, setShowAll] = useState(false);
+  const [shown, setShown] = useState(GLYPH_LIMIT);
 
   useEffect(() => {
+    setShown(GLYPH_LIMIT);
     const cached = charsetCache.get(face.id);
     if (cached) {
       setCps(cached);
@@ -252,7 +267,7 @@ function GlyphMap({
     ipc
       .getCharset(face.previewPath ?? face.path, face.faceIndex)
       .then((list) => {
-        charsetCache.set(face.id, list);
+        charsetSet(face.id, list);
         if (alive) setCps(list);
       })
       .catch(() => alive && setCps([]));
@@ -268,7 +283,9 @@ function GlyphMap({
     return <div className="glyph-empty">{t("glyph.none")}</div>;
   }
 
-  const visible = showAll ? cps : cps.slice(0, GLYPH_LIMIT);
+  // Paged rendering: "show all" used to mount up to 4096 glyph buttons at
+  // once (each painting its own webfont glyph) and froze the UI for seconds.
+  const visible = cps.slice(0, shown);
   return (
     <>
       <div className="glyph-grid">
@@ -297,8 +314,8 @@ function GlyphMap({
           );
         })}
       </div>
-      {cps.length > GLYPH_LIMIT && !showAll && (
-        <button className="glyph-more" onClick={() => setShowAll(true)}>
+      {shown < cps.length && (
+        <button className="glyph-more" onClick={() => setShown((n) => Math.min(n + GLYPH_PAGE, cps.length))}>
           {t("glyph.showAll", { count: cps.length })}
         </button>
       )}
@@ -414,6 +431,78 @@ function TagEditor({ family, tags }: { family: string; tags: string[] }) {
           <Plus size={13} strokeWidth={1.5} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function ConflictFileCard({ path }: { path: string }) {
+  const t = useT();
+  const fonts = useFontStore((s) => s.fonts);
+  const setFontFileActive = useFontStore((s) => s.setFontFileActive);
+  const uninstallFontFile = useFontStore((s) => s.uninstallFontFile);
+  const faces = fonts.filter((f) => f.path === path);
+  const rep = faces[0] ?? null;
+  const isSystem = faces.length === 0 || faces.some((f) => f.source === "system");
+  const isActive = faces.some((f) => f.active);
+  const canToggle = !isSystem && faces.some((f) => f.deactivatable);
+  const styles = [...new Set(faces.map((f) => f.style))].join(", ");
+  const sourceLabel =
+    rep?.source === "system"
+      ? t("detail.systemFont")
+      : rep?.source === "managed"
+        ? "Managed"
+        : rep?.source === "user"
+          ? "User"
+          : null;
+
+  return (
+    <div className="conflict-file">
+      <button
+        className="path-link detail-mono"
+        onClick={() =>
+          revealItemInDir(path).catch(() => toast.error(t("toast.couldntOpenFileManager")))
+        }
+        title={path}
+      >
+        <FolderOpen size={11} strokeWidth={1.5} />
+        <span className="conflict-file-name">{pathBasename(path)}</span>
+      </button>
+      <div className="conflict-file-meta">
+        {rep && (
+          <span className="conflict-file-family">
+            {rep.family}
+            {styles ? ` — ${styles}` : ""}
+          </span>
+        )}
+        {sourceLabel && (
+          <span className="conflict-file-badges">
+            <span className="conflict-badge-src">{sourceLabel}</span>
+          </span>
+        )}
+      </div>
+      <span className="conflict-file-path detail-mono">{path}</span>
+      {isSystem ? (
+        <span className="conflict-system-note">{t("detail.conflictSystemProtected")}</span>
+      ) : (
+        <>
+          <div className="conflict-file-row">
+            <span className="activate-label">{t(isActive ? "detail.active" : "detail.inactive")}</span>
+            <PillToggle
+              on={isActive}
+              disabled={!canToggle}
+              onChange={(on) => void setFontFileActive(path, on)}
+              label={t(isActive ? "card.deactivate" : "card.activate", { name: pathBasename(path) })}
+            />
+            <button
+              className="conflict-btn conflict-btn-trash"
+              onClick={() => void uninstallFontFile(path)}
+            >
+              <Trash2 size={12} strokeWidth={1.5} />
+              {t("detail.conflictTrash")}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -549,6 +638,12 @@ export function DetailPanel() {
                 aria-label={t(favorite ? "detail.unfavorite" : "detail.favorite")}
                 aria-pressed={favorite}
                 onClick={() => {
+                  const st = useFontStore.getState();
+                  if (st.selection.length > 1 && st.selection.includes(family.name)) {
+                    playStar(true);
+                    void st.favoriteMany(st.selection);
+                    return;
+                  }
                   playStar(!favorite);
                   void toggleFavorite(family.name);
                 }}
@@ -597,7 +692,7 @@ export function DetailPanel() {
             </motion.section>
 
             <motion.section
-              className={`detail-activate ${family.active ? "" : "card-inactive"}`}
+              className="detail-activate"
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
             >
               <div>
@@ -710,7 +805,18 @@ export function DetailPanel() {
                   </>
                 )}
                 <dt>{t("detail.location")}</dt>
-                <dd className="detail-mono detail-path">{lead.path}</dd>
+                <dd className="detail-path">
+                  <button
+                    className="path-link detail-mono"
+                    onClick={() =>
+                      revealItemInDir(lead.path).catch(() => toast.error(t("toast.couldntOpenFileManager")))
+                    }
+                    title={lead.path}
+                  >
+                    <FolderOpen size={11} strokeWidth={1.5} />
+                    <span>{lead.path}</span>
+                  </button>
+                </dd>
                 {family.isVariable && lead.axes.length > 0 && (
                   <>
                     <dt>{t("detail.axes")}</dt>
@@ -765,16 +871,7 @@ export function DetailPanel() {
                   <div key={c.key} className="conflict-group">
                     <span className="conflict-key detail-mono">{c.key}</span>
                     {c.paths.map((p) => (
-                      <button
-                        key={p}
-                        className="conflict-path detail-mono"
-                        onClick={() =>
-                          revealItemInDir(p).catch(() => toast.error(t("toast.couldntOpenFileManager")))
-                        }
-                      >
-                        <FolderOpen size={11} strokeWidth={1.5} />
-                        {p}
-                      </button>
+                      <ConflictFileCard key={p} path={p} />
                     ))}
                   </div>
                 ))}

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { openUrl as openInBrowser } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
 import { ArrowUpRight, Download, Globe } from "lucide-react";
 import { spring, springSoft, staggerDelay } from "../design/springs";
@@ -15,7 +15,7 @@ function GithubGlyph({ size = 16 }: { size?: number }) {
 }
 
 function openUrl(url: string) {
-  invoke("open_url", { url }).catch((e) => toast.error(translate("toast.couldntOpenLink"), String(e)));
+  openInBrowser(url).catch((e) => toast.error(translate("toast.couldntOpenLink"), String(e)));
 }
 
 const LINKS: { key: TKey; sub: string; url: string; icon: React.ReactNode }[] = [
