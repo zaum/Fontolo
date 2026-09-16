@@ -2,6 +2,7 @@ use crate::font_types::{FontFace, FontSource};
 use crate::parser;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::Emitter;
 use walkdir::WalkDir;
 
@@ -10,6 +11,22 @@ use walkdir::WalkDir;
 pub struct ScanProgress {
     pub done: usize,
     pub total: usize,
+}
+
+/// Parse cache: a full rescan re-reads thousands of files, but the watcher
+/// fires on every save. Unchanged files (same size + mtime) reuse the faces
+/// parsed last time instead of hitting the disk again.
+struct CacheEntry {
+    len: u64,
+    mtime: Option<std::time::SystemTime>,
+    faces: Vec<FontFace>,
+}
+
+static PARSE_CACHE: std::sync::OnceLock<Mutex<std::collections::HashMap<PathBuf, CacheEntry>>> =
+    std::sync::OnceLock::new();
+
+fn parse_cache() -> &'static Mutex<std::collections::HashMap<PathBuf, CacheEntry>> {
+    PARSE_CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
 }
 
 /// Default folder moved imports are stored in (per-user fonts on Windows).
@@ -104,16 +121,58 @@ pub fn scan_all(app: &tauri::AppHandle, extra: &[String], managed: &Path) -> Vec
         .collect();
 
     let total = files.len();
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::with_capacity(total);
     let mut faces = Vec::with_capacity(total);
     for (done, (path, base_source)) in files.into_iter().enumerate() {
+        seen.insert(path.clone());
         let source = classify(&path, base_source, managed);
-        faces.extend(parser::parse_font_file(&path, source));
+        faces.extend(cached_parse(&path, source));
         if done % 25 == 0 || done + 1 == total {
             let _ = app.emit("scan:progress", ScanProgress { done: done + 1, total });
         }
     }
+    prune_cache(&seen);
 
     faces.sort_by(|a, b| a.id.cmp(&b.id));
     faces.dedup_by(|a, b| a.id == b.id);
     faces
+}
+
+fn cached_parse(path: &Path, source: FontSource) -> Vec<FontFace> {
+    let meta = std::fs::metadata(path).ok();
+    let len = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    let mtime = meta.and_then(|m| m.modified().ok());
+    let key = path.to_path_buf();
+
+    if let Ok(cache) = parse_cache().lock() {
+        if let Some(entry) = cache.get(&key) {
+            if entry.len == len && entry.mtime == mtime {
+                // Cache hit: same bytes as last time. Re-apply `source`
+                // because it depends on the current library-dir setting.
+                let mut faces = entry.faces.clone();
+                for f in &mut faces {
+                    f.source = source;
+                    f.deactivatable = crate::activation::can_deactivate(source);
+                }
+                return faces;
+            }
+        }
+    }
+
+    let faces = parser::parse_font_file(path, source);
+    if let Ok(mut cache) = parse_cache().lock() {
+        // Bound memory: a big library can hold tens of thousands of files.
+        if cache.len() > 20_000 {
+            cache.clear();
+        }
+        cache.insert(key, CacheEntry { len, mtime, faces: faces.clone() });
+    }
+    faces
+}
+
+/// Drop cache entries for files that no longer exist (e.g. after uninstall).
+fn prune_cache(seen: &std::collections::HashSet<PathBuf>) {
+    if let Ok(mut cache) = parse_cache().lock() {
+        cache.retain(|path, _| seen.contains(path));
+    }
 }

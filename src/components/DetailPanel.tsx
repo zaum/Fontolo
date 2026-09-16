@@ -226,7 +226,21 @@ function AxisSliders({
 }
 
 const charsetCache = new Map<string, number[]>();
+// Cap memory: one CJK face can hold 4096 codepoints; scrolling a big
+// library would otherwise grow this map without bound.
+const CHARSET_CACHE_MAX = 200;
 const GLYPH_LIMIT = 512;
+const GLYPH_PAGE = 512;
+
+function charsetSet(id: string, list: number[]) {
+  charsetCache.delete(id);
+  charsetCache.set(id, list);
+  while (charsetCache.size > CHARSET_CACHE_MAX) {
+    const oldest = charsetCache.keys().next().value;
+    if (oldest === undefined) break;
+    charsetCache.delete(oldest);
+  }
+}
 
 function GlyphMap({
   face,
@@ -239,9 +253,10 @@ function GlyphMap({
 }) {
   const t = useT();
   const [cps, setCps] = useState<number[] | null>(charsetCache.get(face.id) ?? null);
-  const [showAll, setShowAll] = useState(false);
+  const [shown, setShown] = useState(GLYPH_LIMIT);
 
   useEffect(() => {
+    setShown(GLYPH_LIMIT);
     const cached = charsetCache.get(face.id);
     if (cached) {
       setCps(cached);
@@ -252,7 +267,7 @@ function GlyphMap({
     ipc
       .getCharset(face.previewPath ?? face.path, face.faceIndex)
       .then((list) => {
-        charsetCache.set(face.id, list);
+        charsetSet(face.id, list);
         if (alive) setCps(list);
       })
       .catch(() => alive && setCps([]));
@@ -268,7 +283,9 @@ function GlyphMap({
     return <div className="glyph-empty">{t("glyph.none")}</div>;
   }
 
-  const visible = showAll ? cps : cps.slice(0, GLYPH_LIMIT);
+  // Paged rendering: "show all" used to mount up to 4096 glyph buttons at
+  // once (each painting its own webfont glyph) and froze the UI for seconds.
+  const visible = cps.slice(0, shown);
   return (
     <>
       <div className="glyph-grid">
@@ -297,8 +314,8 @@ function GlyphMap({
           );
         })}
       </div>
-      {cps.length > GLYPH_LIMIT && !showAll && (
-        <button className="glyph-more" onClick={() => setShowAll(true)}>
+      {shown < cps.length && (
+        <button className="glyph-more" onClick={() => setShown((n) => Math.min(n + GLYPH_PAGE, cps.length))}>
           {t("glyph.showAll", { count: cps.length })}
         </button>
       )}

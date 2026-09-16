@@ -196,6 +196,7 @@ function buildBulkMenu(names: string[]): MenuItem[] {
 
 export function buildFamilyMenu(family: Family): MenuItem[] {
   const s = useFontStore.getState();
+  const tags = allTags(s.tags);
   if (s.selection.length > 1 && s.selection.includes(family.name)) {
     return buildBulkMenu(s.selection);
   }
@@ -247,6 +248,15 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
         label: name,
         checked: (s.collections[name] ?? []).includes(family.name),
         action: () => void s.toggleFamilyInCollection(name, family.name),
+      }),
+    ),
+    { kind: "heading", label: t("menu.tagAll") },
+    ...[...tags.keys()].map(
+      (tag): MenuItem => ({
+        kind: "check",
+        label: tag,
+        checked: (s.tags[family.name] ?? []).includes(tag),
+        action: () => void s.toggleTagForFamily(tag, family.name),
       }),
     ),
     {

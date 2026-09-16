@@ -119,8 +119,8 @@ export const ipc = {
   getFeatures: (path: string, faceIndex: number) =>
     invoke<string[]>("get_features", { path, faceIndex }),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
-  writeBinaryFile: (path: string, data: number[]) =>
-    invoke<void>("write_binary_file", { path, data }),
+  writeBinaryFile: (path: string, dataBase64: string) =>
+    invoke<void>("write_binary_file", { path, dataBase64 }),
   getCollections: () => invoke<Record<string, string[]>>("get_collections"),
   setCollection: (name: string, families: string[]) =>
     invoke<void>("set_collection", { name, families }),

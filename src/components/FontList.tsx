@@ -64,6 +64,9 @@ export function FontList({ families }: { families: Family[] }) {
                   transform: `translateY(${item.start}px)`,
                 }}
                 onClick={(e) => {
+                  // Guard against clicks that were retargeted from the
+                  // toggle pill to the row (element replaced mid-press).
+                  if ((e.target as HTMLElement).closest("button")) return;
                   const st = useFontStore.getState();
 
                   if (st.comparePicking) {

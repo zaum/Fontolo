@@ -21,12 +21,60 @@ pub fn can_deactivate(source: FontSource) -> bool {
 }
 
 pub fn sync(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
+    set_state(state, path, active);
+    apply(state, path, active)
+}
+
+/// Apply the same activation state to many paths with a single platform
+/// commit. Bulk callers (install, family toggle, session revert) used to call
+/// [`sync`] per path, which re-wrote the fontconfig file and spawned an
+/// `fc-cache` process every time. This updates the bookkeeping for all paths
+/// first, then commits once — and skips duplicate paths (a TTC family lists
+/// the same file once per face).
+pub fn sync_many(state: &mut AppState, paths: &[String], active: bool) -> Result<(), String> {
+    let mut ordered: Vec<&str> = Vec::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    for p in paths {
+        if seen.insert(p.as_str()) {
+            ordered.push(p.as_str());
+        }
+    }
+    for path in &ordered {
+        set_state(state, path, active);
+    }
+    apply_many(state, &ordered, active)
+}
+
+fn set_state(state: &mut AppState, path: &str, active: bool) {
     if active {
         state.deactivated.remove(path);
     } else {
         state.deactivated.insert(path.to_string());
     }
-    apply(state, path, active)
+}
+
+/// Single-path back-ends (macOS file moves, Windows registry) still apply
+/// per path, but the bookkeeping above is already de-duplicated.
+#[cfg(target_os = "macos")]
+fn apply_many(state: &mut AppState, paths: &[&str], active: bool) -> Result<(), String> {
+    let mut first_err = None;
+    for path in paths {
+        if let Err(e) = apply(state, path, active) {
+            first_err.get_or_insert(e);
+        }
+    }
+    first_err.map_or(Ok(()), Err)
+}
+
+#[cfg(target_os = "linux")]
+fn apply_many(state: &mut AppState, _paths: &[&str], _active: bool) -> Result<(), String> {
+    // One file write + one fc-cache run for the whole batch.
+    apply(state, "", true)
+}
+
+#[cfg(target_os = "windows")]
+fn apply_many(state: &mut AppState, paths: &[&str], active: bool) -> Result<(), String> {
+    apply_batch(state, paths, active)
 }
 
 #[cfg(target_os = "linux")]
@@ -122,8 +170,46 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
 fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
     use crate::registry;
 
-    if active {
+    // Single font toggle: snapshot is cheap (one enumeration) and keeps the
+    // per-path logic identical to the batch path below.
+    let snap = registry::UserSnapshot::load();
+    apply_one(state, &snap, path, active)?;
+    registry::broadcast_font_change();
+    Ok(())
+}
 
+/// Batch entry for [`sync_many`]: one registry snapshot + one broadcast for
+/// the whole batch instead of per-font enumeration and notification.
+#[cfg(target_os = "windows")]
+pub fn apply_batch(
+    state: &mut AppState,
+    paths: &[&str],
+    active: bool,
+) -> Result<(), String> {
+    use crate::registry;
+
+    let snap = registry::UserSnapshot::load();
+    let mut first_err = None;
+    for path in paths {
+        if let Err(e) = apply_one(state, &snap, path, active) {
+            first_err.get_or_insert(e);
+        }
+    }
+    // One system-wide notification no matter how many fonts changed.
+    registry::broadcast_font_change();
+    first_err.map_or(Ok(()), Err)
+}
+
+#[cfg(target_os = "windows")]
+fn apply_one(
+    state: &mut AppState,
+    snap: &crate::registry::UserSnapshot,
+    path: &str,
+    active: bool,
+) -> Result<(), String> {
+    use crate::registry;
+
+    if active {
         let remembered = state
             .registry_backup
             .iter()
@@ -131,9 +217,21 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
             .map(|(k, _)| k.clone());
         let name = match remembered {
             Some(name) => name,
-            None => registry::unique_user_name(&registry::value_name_for(path), path),
+            None => {
+                // Reuse the shared file cache instead of reading the font
+                // file again just to derive the registry value name.
+                let bytes = crate::parser::read_font_bytes(std::path::Path::new(path))
+                    .map(|(d, _)| d)
+                    .unwrap_or_default();
+                let base = if bytes.is_empty() {
+                    registry::value_name_for(path)
+                } else {
+                    registry::value_name_for_data(&bytes, std::path::Path::new(path))
+                };
+                snap.unique_name(&base, path)
+            }
         };
-        if registry::user_entries_for(path).is_empty() {
+        if snap.names_for(path).is_empty() {
             registry::set_user_entry(&name, path)?;
         }
         state.registry_backup.remove(&name);
@@ -145,7 +243,7 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
             ));
         }
 
-        let names = registry::user_entries_for(path);
+        let names = snap.names_for(path);
         for name in &names {
             registry::delete_user_entry(name)?;
         }
@@ -154,7 +252,6 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
         }
         registry::remove_font_resource(path);
     }
-    registry::broadcast_font_change();
     Ok(())
 }
 

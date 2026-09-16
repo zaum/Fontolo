@@ -91,14 +91,8 @@ fn set_font_active(store: State<Store>, path: String, active: bool) -> Result<()
 fn set_fonts_active(store: State<Store>, paths: Vec<String>, active: bool) -> Result<(), String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
 
-    let mut first_err = None;
-    for path in &paths {
-        if let Err(e) = activation::sync(&mut state, path, active) {
-            first_err.get_or_insert(e);
-        }
-    }
-    store::save(&state)?;
-    first_err.map_or(Ok(()), Err)
+    activation::sync_many(&mut state, &paths, active)?;
+    store::save(&state)
 }
 
 #[tauri::command]
@@ -132,9 +126,9 @@ async fn install_fonts(
             }
         }
         auto = state.auto_activate_imports && result.installed.len() < 64;
-        for face in &result.installed {
-            let _ = activation::sync(&mut state, &face.path, auto);
-        }
+        // One platform commit for the whole batch (Linux: single fc-cache run).
+        let paths: Vec<String> = result.installed.iter().map(|f| f.path.clone()).collect();
+        let _ = activation::sync_many(&mut state, &paths, auto);
         let _ = store::save(&state);
     }
     // Previews load through the asset protocol: allow the folders new files live in.
@@ -189,19 +183,17 @@ fn affinity_session_activate(
     paths: Vec<String>,
 ) -> Result<Vec<String>, String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
-    let mut first_err = None;
     let mut activated = Vec::with_capacity(paths.len());
-    for path in paths {
-        match activation::sync(&mut state, &path, true) {
-            Ok(()) => activated.push(path),
-            Err(e) => {
-                first_err.get_or_insert(e);
-            }
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    for path in &paths {
+        if seen.insert(path.as_str()) {
+            activated.push(path.clone());
         }
     }
+    activation::sync_many(&mut state, &activated, true)?;
     store::save(&state)?;
     affinity::note_activated(activated.clone());
-    first_err.map_or(Ok(activated), Err)
+    Ok(activated)
 }
 
 #[tauri::command]
@@ -318,7 +310,7 @@ fn set_favorite(store: State<Store>, family: String, favorite: bool) -> Result<(
 
 #[tauri::command]
 fn get_charset(path: String, face_index: u32) -> Result<Vec<u32>, String> {
-    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let (data, _) = parser::read_font_bytes(std::path::Path::new(&path))?;
     let face = ttf_parser::Face::parse(&data, face_index).map_err(|e| e.to_string())?;
     let mut cps: Vec<u32> = Vec::new();
     if let Some(cmap) = face.tables().cmap {
@@ -364,13 +356,21 @@ static SESSION_ACTIVATED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(
 #[tauri::command]
 fn set_fonts_active_session(store: State<Store>, paths: Vec<String>) -> Result<(), String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
-    let mut first_err = None;
-    let mut activated = Vec::with_capacity(paths.len());
-    for path in paths {
-        match activation::sync(&mut state, &path, true) {
-            Ok(()) => activated.push(path),
+    // Best effort: keep every path that applied cleanly in the session list.
+    let mut activated: Vec<String> = Vec::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    for path in &paths {
+        if !seen.insert(path.as_str()) {
+            continue;
+        }
+        match activation::sync(&mut state, path, true) {
+            Ok(()) => activated.push(path.clone()),
             Err(e) => {
-                first_err.get_or_insert(e);
+                store::save(&state)?;
+                if let Ok(mut session) = SESSION_ACTIVATED.lock() {
+                    session.extend(activated);
+                }
+                return Err(e);
             }
         }
     }
@@ -378,7 +378,7 @@ fn set_fonts_active_session(store: State<Store>, paths: Vec<String>) -> Result<(
     if let Ok(mut session) = SESSION_ACTIVATED.lock() {
         session.extend(activated);
     }
-    first_err.map_or(Ok(()), Err)
+    Ok(())
 }
 
 fn revert_session_activations(app: &tauri::AppHandle) {
@@ -395,21 +395,48 @@ fn revert_session_activations(app: &tauri::AppHandle) {
         Ok(g) => g,
         Err(_) => return,
     };
-    for p in &paths {
-        let _ = activation::sync(&mut guard, p, false);
-    }
+    // Single platform commit for the whole session revert.
+    let _ = activation::sync_many(&mut guard, &paths, false);
     affinity::revert_session(&mut guard);
     let _ = store::save(&guard);
 }
 
 #[tauri::command]
-fn write_binary_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+fn write_binary_file(path: String, data_base64: String) -> Result<(), String> {
+    // Base64 arrives as ~1.37x the file size; a JSON number array would be
+    // ~4x and stall the UI on multi-MB specimen PNGs.
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut rev = [u8::MAX; 256];
+    for (i, &c) in TABLE.iter().enumerate() {
+        rev[c as usize] = i as u8;
+    }
+    let clean: Vec<u8> = data_base64.bytes().filter(|&b| b != b'=' && !b.is_ascii_whitespace()).collect();
+    let mut out: Vec<u8> = Vec::with_capacity(clean.len() * 3 / 4);
+    for chunk in clean.chunks(4) {
+        let mut n: u32 = 0;
+        for &c in chunk {
+            let v = rev[c as usize];
+            if v == u8::MAX {
+                return Err("invalid base64 data".into());
+            }
+            n = (n << 6) | v as u32;
+        }
+        let pad = 4 - chunk.len();
+        n <<= pad * 6;
+        out.push((n >> 16) as u8);
+        if pad < 2 {
+            out.push((n >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(n as u8);
+        }
+    }
+    std::fs::write(&path, out).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_features(path: String, face_index: u32) -> Result<Vec<String>, String> {
-    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let (data, _) = parser::read_font_bytes(std::path::Path::new(&path))?;
     let face = ttf_parser::Face::parse(&data, face_index).map_err(|e| e.to_string())?;
     let mut tags: Vec<String> = Vec::new();
     let mut collect = |table: Option<ttf_parser::opentype_layout::LayoutTable>| {

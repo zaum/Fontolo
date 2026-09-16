@@ -125,9 +125,11 @@ function MainContent() {
     [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, nav, sort],
   );
 
+  const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);
+
   useEffect(() => {
-    useFontStore.setState({ visibleOrder: families.map((f) => f.name) });
-  }, [families]);
+    useFontStore.setState({ visibleOrder });
+  }, [visibleOrder]);
 
   if (nav.kind === "trash") return <TrashView />;
   if (nav.kind === "about") return <AboutView />;

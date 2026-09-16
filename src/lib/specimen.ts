@@ -32,7 +32,14 @@ export async function exportSpecimen(family: Family, sampleText: string) {
   if (!dest) return;
   try {
     const bytes = await renderSpecimenPng(family, sampleText);
-    await ipc.writeBinaryFile(dest, Array.from(bytes));
+    // Base64 (~1.37x) instead of a JSON number array (~4x): multi-MB PNGs
+    // no longer stall the UI while crossing the IPC bridge.
+    let binary = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    await ipc.writeBinaryFile(dest, btoa(binary));
     toast.success(t("toast.specimenExported"), dest, "install");
   } catch (e) {
     toast.error(t("toast.couldntExportSpecimen"), String(e));

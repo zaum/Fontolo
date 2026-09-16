@@ -56,7 +56,13 @@ fn move_file(from: &Path, to: &Path) -> Result<(), String> {
         return Ok(());
     }
     fs::copy(from, to).map_err(|e| e.to_string())?;
-    recycle(from)
+    if let Err(e) = recycle(from) {
+        // The move did not happen: remove the stray copy so a failed
+        // uninstall leaves no orphan duplicate behind.
+        let _ = fs::remove_file(to);
+        return Err(e);
+    }
+    Ok(())
 }
 
 /// User files are never deleted outright: they go to the OS recycle bin
@@ -264,9 +270,30 @@ pub fn uninstall(path: &str, family: &str) -> Result<TrashEntry, String> {
     let trash = crate::store::trash_dir();
     fs::create_dir_all(&trash).map_err(|e| e.to_string())?;
     let src = Path::new(path);
+    if !src.is_file() {
+        return Err(format!("font file not found: {path}"));
+    }
     let file_name = src.file_name().ok_or("invalid path")?;
     let dest = unique_dest(&trash, file_name);
-    move_file(src, &dest)?;
+    // The file can stay locked for a moment after unregistering (GDI handle
+    // release on Windows, AV/indexer elsewhere). Retry instead of failing at
+    // once, otherwise the list and the trash view disagree until a rescan.
+    let mut last_err = String::new();
+    for attempt in 0..6 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+        match move_file(src, &dest) {
+            Ok(()) => {
+                last_err.clear();
+                break;
+            }
+            Err(e) => last_err = e,
+        }
+    }
+    if !last_err.is_empty() {
+        return Err(last_err);
+    }
 
     let entry = TrashEntry {
         id: dest.to_string_lossy().into_owned(),
@@ -283,7 +310,18 @@ pub fn uninstall(path: &str, family: &str) -> Result<TrashEntry, String> {
         "{}.zfmtrash",
         dest.extension().and_then(|e| e.to_str()).unwrap_or("bin")
     ));
-    let _ = fs::write(&meta, serde_json::to_vec(&entry).unwrap_or_default());
+    // The sidecar is what list_trash() reads: a missing sidecar means a
+    // moved file that never shows up in the trash view. Never ignore this
+    // write — roll the move back instead so both views stay truthful.
+    let sidecar = serde_json::to_vec(&entry).map_err(|e| e.to_string())?;
+    if let Err(e) = fs::write(&meta, sidecar) {
+        let _ = move_file(&dest, src);
+        return Err(format!("couldn't write trash record: {e}"));
+    }
+    if !dest.is_file() {
+        let _ = fs::remove_file(&meta);
+        return Err("font file disappeared during trash move".to_string());
+    }
     refresh_system_font_cache();
     Ok(entry)
 }

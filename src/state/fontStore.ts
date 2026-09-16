@@ -31,6 +31,11 @@ export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96] as const;
 // listener twice and each toast would appear twice.
 let initStarted = false;
 
+// Every rescan gets a sequence number. A slow scan that started before a
+// newer delete/restore must not overwrite the fresher state when it lands
+// (that is what briefly put deleted fonts back into the list).
+let scanGen = 0;
+
 export type ViewMode = "grid" | "list" | "waterfall";
 export type MotionPref = "system" | "reduced";
 export type SortMode = "name" | "styles" | "size";
@@ -158,6 +163,7 @@ interface FontStore {
   endTour: () => void;
   setBulkTagFor: (families: string[] | null) => void;
   applyTagToFamilies: (tag: string, families: string[]) => Promise<void>;
+  toggleTagForFamily: (tag: string, family: string) => Promise<void>;
   setDuplicateReport: (r: { names: string[]; at: number } | null) => void;
 
   setSampleText: (t: string) => void;
@@ -351,6 +357,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   rescan: async () => {
+    const myGen = ++scanGen;
     set({ phase: "scanning" });
     try {
       const [fonts, tags, collections, favorites, notes, trash] = await Promise.all([
@@ -361,6 +368,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         ipc.getNotes(),
         ipc.listTrash(),
       ]);
+      if (myGen !== scanGen) return;
       set({ fonts, tags, collections, favorites, notes, trash, phase: "ready" });
       // Drop last-imported entries that no longer exist.
       const names = new Set(fonts.map((f) => f.family));
@@ -371,6 +379,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       const kept = get().sessionActivated.filter((n) => alive.has(n));
       if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
     } catch (e) {
+      if (myGen !== scanGen) return;
       set({ phase: "error" });
       toast.error(t("toast.couldntScan"), String(e));
     }
@@ -382,8 +391,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
     if (paths.length === 0) return;
 
     const prevSession = get().sessionActivated;
+    const prevFonts = get().fonts;
     set({
-      fonts: get().fonts.map((f) =>
+      fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active } : f,
       ),
       sessionActivated: prevSession.filter((n) => n !== family),
@@ -392,9 +402,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       await ipc.setFontsActive(paths, active);
     } catch (e) {
       set({
-        fonts: get().fonts.map((f) =>
-          f.family === family && f.deactivatable ? { ...f, active: !active } : f,
-        ),
+        fonts: prevFonts,
         sessionActivated: prevSession,
       });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
@@ -405,8 +413,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
     const faces = get().fonts.filter((f) => f.family === family && f.deactivatable);
     const paths = [...new Set(faces.map((f) => f.path))];
     if (paths.length === 0) return;
+    const prevFonts = get().fonts;
     set({
-      fonts: get().fonts.map((f) =>
+      fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active: true } : f,
       ),
     });
@@ -420,9 +429,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       );
     } catch (e) {
       set({
-        fonts: get().fonts.map((f) =>
-          f.family === family && f.deactivatable ? { ...f, active: false } : f,
-        ),
+        fonts: prevFonts,
       });
       toast.error(t("toast.couldntActivate"), String(e));
     }
@@ -474,6 +481,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
           ? get().lastImported.filter((f) => f !== family)
           : get().lastImported,
       });
+      // Converge to the backend truth: a watcher-triggered scan that started
+      // before this delete must not put the file back into the list.
+      await get().rescan();
 
       if (!familyAlive) {
         const { tags, favorites, collections } = get();
@@ -504,6 +514,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
       });
     } catch (e) {
       toast.error(t("toast.couldntMoveToTrash"), String(e));
+      // The backend may have moved the file before failing (or a watcher
+      // scan may hold stale data): re-read so list and trash agree.
+      await get().rescan();
     }
   },
 
@@ -553,27 +566,55 @@ export const useFontStore = create<FontStore>((set, get) => ({
     }
     const paths = [...new Set(faces.map((f) => f.path))];
     try {
+      // Move files one by one: a locked file must not silently cancel the
+      // rest of the family, nor leave moved files out of the UI update.
       const entryIds: string[] = [];
+      const movedPaths: string[] = [];
+      const failed: string[] = [];
       for (const path of paths) {
-        entryIds.push((await ipc.uninstallFont(path, family)).id);
-      }
-      set({
-        fonts: get().fonts.filter((f) => !paths.includes(f.path)),
-        trash: await ipc.listTrash(),
-        selectedFamily: get().selectedFamily === family ? null : get().selectedFamily,
-        selection: get().selection.filter((f) => f !== family),
-        lastImported: get().lastImported.filter((f) => f !== family),
-      });
-
-      const { tags, favorites, collections } = get();
-      if (tags[family]) void get().setFamilyTags(family, []);
-      if (favorites.includes(family)) void get().toggleFavorite(family);
-      for (const [name, members] of Object.entries(collections)) {
-        if (members.includes(family)) {
-          const next = members.filter((m) => m !== family);
-          set({ collections: { ...get().collections, [name]: next } });
-          void ipc.setCollection(name, next);
+        try {
+          entryIds.push((await ipc.uninstallFont(path, family)).id);
+          movedPaths.push(path);
+        } catch (e) {
+          failed.push(`${path}: ${String(e)}`);
         }
+      }
+      if (movedPaths.length === 0) {
+        toast.error(t("toast.couldntMoveToTrash"), failed.join("\n"));
+        await get().rescan();
+        return;
+      }
+      const remaining = get().fonts.filter((f) => !movedPaths.includes(f.path));
+      const familyAlive = remaining.some((f) => f.family === family);
+      set({
+        fonts: remaining,
+        trash: await ipc.listTrash(),
+        selectedFamily:
+          !familyAlive && get().selectedFamily === family ? null : get().selectedFamily,
+        selection: !familyAlive
+          ? get().selection.filter((f) => f !== family)
+          : get().selection,
+        lastImported: !familyAlive
+          ? get().lastImported.filter((f) => f !== family)
+          : get().lastImported,
+      });
+      // Converge to the backend truth (see uninstallFontFile).
+      await get().rescan();
+
+      if (!familyAlive) {
+        const { tags, favorites, collections } = get();
+        if (tags[family]) void get().setFamilyTags(family, []);
+        if (favorites.includes(family)) void get().toggleFavorite(family);
+        for (const [name, members] of Object.entries(collections)) {
+          if (members.includes(family)) {
+            const next = members.filter((m) => m !== family);
+            set({ collections: { ...get().collections, [name]: next } });
+            void ipc.setCollection(name, next);
+          }
+        }
+      }
+      if (failed.length > 0) {
+        toast.error(t("toast.couldntMoveToTrash"), failed.join("\n"));
       }
       toast.success(t("toast.movedToTrash", { family }), t("toast.movedToTrashSub"), "trash", {
         label: t("toast.undo"),
@@ -592,6 +633,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       });
     } catch (e) {
       toast.error(t("toast.couldntMoveToTrash"), String(e));
+      await get().rescan();
     }
   },
 
@@ -978,6 +1020,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
           : [...current, clean];
       if (next !== current) await get().setFamilyTags(family, next);
     }
+  },
+
+  toggleTagForFamily: async (tag, family) => {
+    const current = get().tags[family] ?? [];
+    const next = current.includes(tag)
+      ? current.filter((t) => t !== tag)
+      : [...current, tag];
+    await get().setFamilyTags(family, next);
   },
 
   setDuplicateReport: (duplicateReport) => set({ duplicateReport }),

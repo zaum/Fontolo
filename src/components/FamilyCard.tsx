@@ -100,6 +100,12 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
       aria-label={family.name}
       aria-pressed={selected}
       onClick={(e) => {
+        // Clicks on interactive controls (toggle, star, expand) must not
+        // select the card. React retargets `click` to the nearest common
+        // ancestor when the pressed element is replaced mid-press (motion
+        // layout re-render), so the pill's stopPropagation is not always
+        // enough — filter at the card level as well.
+        if ((e.target as HTMLElement).closest("button")) return;
         const st = useFontStore.getState();
 
         if (st.comparePicking) {

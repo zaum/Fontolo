@@ -497,9 +497,17 @@ pub fn revert_session(state: &mut crate::store::AppState) -> usize {
         Ok(mut s) => std::mem::take(&mut *s),
         Err(_) => return 0,
     };
+    if paths.is_empty() {
+        return 0;
+    }
+    // One platform commit instead of one per font.
+    if crate::activation::sync_many(state, &paths, false).is_err() {
+        return 0;
+    }
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
     let mut n = 0;
     for p in &paths {
-        if crate::activation::sync(state, p, false).is_ok() {
+        if seen.insert(p.as_str()) {
             n += 1;
         }
     }
@@ -542,10 +550,10 @@ pub fn tick(app: &tauri::AppHandle) {
     let Some((enabled, deactivate_on_quit)) = settings_snapshot(app) else {
         return;
     };
-    let running = is_affinity_running();
-    let was = WAS_RUNNING.swap(running, Ordering::SeqCst);
-
     if !enabled {
+        // Feature off: never scan the process table (that refresh is the
+        // expensive part). Just clean up any leftover session state.
+        WAS_RUNNING.store(false, Ordering::SeqCst);
         if !session_empty() {
             if let Some(store) = app.try_state::<Store>() {
                 if let Ok(mut state) = store.0.lock() {
@@ -554,13 +562,13 @@ pub fn tick(app: &tauri::AppHandle) {
             }
             emit(app, "deactivated", Vec::new(), None);
         }
-        if !running {
-            if let Ok(mut known) = known_docs().lock() {
-                known.clear();
-            }
+        if let Ok(mut known) = known_docs().lock() {
+            known.clear();
         }
         return;
     }
+    let running = is_affinity_running();
+    let was = WAS_RUNNING.swap(running, Ordering::SeqCst);
 
     if running && !was {
         // Affinity just started: query everything.
