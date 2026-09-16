@@ -1349,12 +1349,25 @@ export function selectVisibleFamilies(s: {
       f.faces.length > 0 && f.faces.every((face) => face.source === "system");
   }
   let groupPred: ((f: Family) => boolean) | null = null;
-  if (s.selCols.length > 0 || s.selTags.length > 0 || (s.selFoundrys?.length ?? 0) > 0) {
+  // Collections and tags widen the view together (union), but a selected
+  // foundry NARROWS that set: a family must belong to one of the selected
+  // collections/tags AND come from one of the selected foundries. When only
+  // foundries are selected they act as the filter on their own.
+  const hasColTag = s.selCols.length > 0 || s.selTags.length > 0;
+  const hasFoundry = (s.selFoundrys?.length ?? 0) > 0;
+  if (hasColTag || hasFoundry) {
     const members = new Set(s.selCols.flatMap((c) => s.collections[c] ?? []));
-    groupPred = (f) =>
-      members.has(f.name) ||
-      s.selTags.some((tg) => f.tags.includes(tg)) ||
-      (s.selFoundrys?.includes(f.foundry ?? "") ?? false);
+    const foundryGroups = hasFoundry ? foundryGroupsFor(familiesFor(s.fonts, s.tags)) : null;
+    const inColOrTag = (f: Family) =>
+      members.has(f.name) || s.selTags.some((tg) => f.tags.includes(tg));
+    const inFoundry = (f: Family) =>
+      s.selFoundrys!.includes(foundryGroups!.get(f.foundry ?? "") ?? f.foundry ?? "");
+    groupPred =
+      hasColTag && hasFoundry
+        ? (f) => inColOrTag(f) && inFoundry(f)
+        : hasColTag
+          ? inColOrTag
+          : inFoundry;
   }
   if (browsePred || groupPred) {
     out = out.filter(
@@ -1471,11 +1484,110 @@ export function allFoundrys(fonts: FontFace[]): string[] {
   return [...set].sort();
 }
 
+// ---------------------------------------------------------------------------
+// Foundry grouping
+//
+// Foundry strings read from font metadata vary a lot for the same company
+// ("Dalton Maag" vs "Dalton Maag Ltd." vs "DaltonMaag"). Clustering them
+// fuzzily keeps the sidebar to one entry per foundry: every raw variant maps
+// to a canonical display name (the most frequent original spelling).
+// ---------------------------------------------------------------------------
+
+/** Legal/corporate words ignored when normalizing foundry names. */
+const FOUNDRY_SUFFIXES = new Set([
+  "ltd", "limited", "llc", "inc", "incorporated", "gmbh", "co", "corp",
+  "corporation", "company", "sa", "ag", "bv", "nv", "plc", "kg", "ohg",
+  "sas", "sarl", "srl", "spa", "ab", "as", "oy", "aps",
+]);
+
+/** Lowercase, strip diacritics/punctuation and drop corporate suffix words. */
+function normalizeFoundry(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 0 && !FOUNDRY_SUFFIXES.has(w))
+    .join(" ");
+}
+
+/** Levenshtein-based similarity in [0, 1]. */
+function stringSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (!a || !b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return 1 - prev[b.length] / Math.max(a.length, b.length);
+}
+
+/** Two normalized foundry names are considered the same company. */
+function sameFoundry(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  // "Monotype" vs "Monotype Imaging" — one is a word-prefix of the other.
+  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b + " ") || b.startsWith(a + " "))) {
+    return true;
+  }
+  return stringSimilarity(a, b) >= 0.82;
+}
+
+const foundryGroupCache = new WeakMap<object, Map<string, string>>();
+
+/**
+ * Maps every raw foundry string appearing in the given families to its
+ * canonical display name. Cached per families map, like `familiesFor`.
+ */
+export function foundryGroupsFor(
+  families: Map<string, Family>,
+): Map<string, string> {
+  let groups = foundryGroupCache.get(families);
+  if (!groups) {
+    // Raw spelling -> how many families spell the foundry that way.
+    const rawCounts = new Map<string, number>();
+    for (const fam of families.values()) {
+      if (fam.foundry) rawCounts.set(fam.foundry, (rawCounts.get(fam.foundry) ?? 0) + 1);
+    }
+    // Most frequent spelling first so the cluster's display name is the one
+    // users see most; ties break alphabetically for stability.
+    const sorted = [...rawCounts.entries()].sort(
+      ([a, ca], [b, cb]) => cb - ca || a.localeCompare(b),
+    );
+    const clusters: { norm: string; display: string }[] = [];
+    groups = new Map();
+    for (const [raw] of sorted) {
+      const norm = normalizeFoundry(raw);
+      const cluster = clusters.find((c) => sameFoundry(c.norm, norm));
+      if (cluster) {
+        groups.set(raw, cluster.display);
+      } else {
+        clusters.push({ norm, display: raw });
+        groups.set(raw, raw);
+      }
+    }
+    foundryGroupCache.set(families, groups);
+  }
+  return groups;
+}
+
 export function allFoundryCounts(fonts: FontFace[], tags: Record<string, string[]>): Map<string, number> {
+  const fams = familiesFor(fonts, tags);
+  const groups = foundryGroupsFor(fams);
   const m = new Map<string, number>();
-  for (const fam of familiesFor(fonts, tags).values()) {
+  for (const fam of fams.values()) {
     if (!fam.foundry) continue;
-    m.set(fam.foundry, (m.get(fam.foundry) ?? 0) + 1);
+    const key = groups.get(fam.foundry) ?? fam.foundry;
+    m.set(key, (m.get(key) ?? 0) + 1);
   }
   return new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }

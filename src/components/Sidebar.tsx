@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, Star, Tag, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Star, Tag, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
-import { allFoundryCounts, allTags, familiesFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
+import { allFoundryCounts, allTags, familiesFor, foundryGroupsFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
 
@@ -22,6 +22,8 @@ function NavRow({
   count,
   index,
   onContextMenu,
+  related,
+  rowRef,
 }: {
   active: boolean;
   lead: boolean;
@@ -32,10 +34,16 @@ function NavRow({
   count?: number;
   index: number;
   onContextMenu?: (e: React.MouseEvent) => void;
+  /** The row belongs to the currently selected family (accent-tinted). */
+  related?: boolean;
+  /** Ref sink so the sidebar can scroll the row into view. */
+  rowRef?: (el: HTMLElement | null) => void;
 }) {
   return (
     <motion.button
-      className={`nav-row ${active ? "nav-active" : ""}`}
+      ref={rowRef}
+      data-family-row={related ? label : undefined}
+      className={`nav-row ${active ? "nav-active" : ""} ${related ? "nav-related" : ""}`}
       onClick={onPick}
       onContextMenu={onContextMenu}
       initial={{ opacity: 0, x: -12 }}
@@ -50,6 +58,34 @@ function NavRow({
       <span className="nav-icon">{icon}</span>
       <span className="nav-label">{label}</span>
       {count !== undefined && <span className="nav-count tabular">{count}</span>}
+    </motion.button>
+  );
+}
+
+/**
+ * Small round chip beside a section heading; visible only while the section
+ * owns an active filter. Click clears that filter block.
+ */
+function SectionReset({ show, label, onReset }: { show: boolean; label: string; onReset: () => void }) {
+  if (!show) return null;
+  return (
+    <motion.button
+      className="sidebar-reset"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onReset();
+      }}
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.6 }}
+      transition={springSoft}
+      whileTap={{ scale: 0.85 }}
+    >
+      {/* Nearly-closed circular arrow — the app's reset icon (same as the
+          detail panel's Reset action). */}
+      <RotateCcw size={12} strokeWidth={2} />
     </motion.button>
   );
 }
@@ -176,6 +212,57 @@ export function Sidebar() {
   const setFilterSel = useFontStore((s) => s.setFilterSel);
   const setArea = useFontStore((s) => s.setArea);
 
+  // ---- Selected-family ties ---------------------------------------------
+  // When a family is selected, the sidebar highlights its tags, foundry and
+  // collections in accent color and scrolls the first matching row into view.
+  // Auto-scroll only happens for a section whose filter is NOT manually
+  // selected (scrolling a manually picked filter away would be confusing).
+  const selectedFamily = useFontStore((s) => s.selectedFamily);
+
+  const related = useMemo(() => {
+    const fam = selectedFamily ? familiesFor(fonts, tags).get(selectedFamily) : undefined;
+    return {
+      cols: selectedFamily
+        ? Object.entries(collections)
+            .filter(([, members]) => members.includes(selectedFamily))
+            .map(([name]) => name)
+        : [],
+      tags: fam?.tags ?? [],
+      foundry: fam?.foundry
+        ? (foundryGroupsFor(familiesFor(fonts, tags)).get(fam.foundry) ?? fam.foundry)
+        : null,
+    };
+  }, [selectedFamily, fonts, tags, collections]);
+  const hasRelated =
+    related.cols.length > 0 || related.tags.length > 0 || related.foundry !== null;
+
+  // Scroll the selected family's first related row into view. A section whose
+  // filter is manually selected is skipped — the user placed that view on
+  // purpose, auto-scrolling away from it would be confusing.
+  const rowRefs = useRef(new Map<string, HTMLElement | null>());
+  const setRowRef = (key: string) => (el: HTMLElement | null) => {
+    if (el) rowRefs.current.set(key, el);
+    else rowRefs.current.delete(key);
+  };
+  useEffect(() => {
+    if (!selectedFamily) return;
+    // Refs of the previous family are gone anyway (the rowRef prop moved on);
+    // drop them so stale rows never win the scroll.
+    for (const key of [...rowRefs.current.keys()]) {
+      if (!key.startsWith(selectedFamily + "|")) rowRefs.current.delete(key);
+    }
+    const rank = (k: string) => (k.includes("|c:") ? 0 : k.includes("|t:") ? 1 : 2);
+    const skip = (k: string) =>
+      k.includes("|c:") ? colSel.length > 0
+      : k.includes("|t:") ? tagSel.length > 0
+      : foundrySel.length > 0;
+    const first = [...rowRefs.current.keys()]
+      .filter((k) => !skip(k))
+      .sort((a, b) => rank(a) - rank(b))[0];
+    rowRefs.current.get(first ?? "")?.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFamily]);
+
   const pickBrowse = (b: BrowseKind) => {
     if (b === "library") {
       // Library resets every block.
@@ -279,10 +366,19 @@ export function Sidebar() {
     >
       <div className="sidebar-scroll">
       <div className="sidebar-section">
-        <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setBrowseOpen((o) => !o)} aria-expanded={browseOpen}>
-          <span className="sidebar-heading-chevron">{browseOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
-          <span>{t("side.browse")}</span>
-        </button>
+        <div className="sidebar-heading sidebar-heading-row">
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setBrowseOpen((o) => !o)} aria-expanded={browseOpen} style={{ flex: 1 }}>
+            <span className="sidebar-heading-chevron">{browseOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+            <span>{t("side.browse")}</span>
+          </button>
+          <AnimatePresence>
+            <SectionReset
+              show={browse !== "library"}
+              label={t("side.resetFilter")}
+              onReset={() => setBrowse("library")}
+            />
+          </AnimatePresence>
+        </div>
         <AnimatePresence initial={false}>
         {browseOpen && (
           <motion.div
@@ -373,6 +469,13 @@ export function Sidebar() {
             <span className="sidebar-heading-chevron">{collectionsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
             <span>{t("side.collections")}</span>
           </button>
+          <AnimatePresence>
+            <SectionReset
+              show={colSel.length > 0}
+              label={t("side.resetFilter")}
+              onReset={() => setFilterSel([], tagSel, foundrySel)}
+            />
+          </AnimatePresence>
           <motion.button
             className="sidebar-add"
             aria-label={t("side.newCollection")}
@@ -422,6 +525,8 @@ export function Sidebar() {
               label={name}
               count={(collections[name] ?? []).length}
               index={i++}
+              related={hasRelated && related.cols.includes(name)}
+              rowRef={hasRelated && related.cols.includes(name) ? setRowRef(`${selectedFamily}|c:${name}`) : undefined}
               onContextMenu={(e) =>
                 openContextMenu(e, [
                   { label: translate("menu.rename"), action: () => setRenaming(name) },
@@ -459,10 +564,19 @@ export function Sidebar() {
 
       {tagCounts.size > 0 && (
         <div className="sidebar-section">
-          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setTagsOpen((o) => !o)} aria-expanded={tagsOpen}>
-            <span className="sidebar-heading-chevron">{tagsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
-            <span>{t("side.tags")}</span>
-          </button>
+          <div className="sidebar-heading sidebar-heading-row">
+            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setTagsOpen((o) => !o)} aria-expanded={tagsOpen} style={{ flex: 1 }}>
+              <span className="sidebar-heading-chevron">{tagsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+              <span>{t("side.tags")}</span>
+            </button>
+            <AnimatePresence>
+              <SectionReset
+                show={tagSel.length > 0}
+                label={t("side.resetFilter")}
+                onReset={() => setFilterSel(colSel, [], foundrySel)}
+              />
+            </AnimatePresence>
+          </div>
           <AnimatePresence initial={false}>
           {tagsOpen && (
             <motion.div
@@ -484,6 +598,8 @@ export function Sidebar() {
               label={tag}
               count={count}
               index={i++}
+              related={hasRelated && related.tags.includes(tag)}
+              rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${selectedFamily}|t:${tag}`) : undefined}
               onContextMenu={(e) =>
                 openContextMenu(e, [
                   {
@@ -504,10 +620,19 @@ export function Sidebar() {
 
       {foundryCounts.size > 0 && (
         <div className="sidebar-section">
-          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setFoundryOpen((o) => !o)} aria-expanded={foundryOpen}>
-            <span className="sidebar-heading-chevron">{foundryOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
-            <span>{t("side.foundry")}</span>
-          </button>
+          <div className="sidebar-heading sidebar-heading-row">
+            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setFoundryOpen((o) => !o)} aria-expanded={foundryOpen} style={{ flex: 1 }}>
+              <span className="sidebar-heading-chevron">{foundryOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+              <span>{t("side.foundry")}</span>
+            </button>
+            <AnimatePresence>
+              <SectionReset
+                show={foundrySel.length > 0}
+                label={t("side.resetFilter")}
+                onReset={() => setFilterSel(colSel, tagSel, [])}
+              />
+            </AnimatePresence>
+          </div>
           <AnimatePresence initial={false}>
           {foundryOpen && (
             <motion.div
@@ -529,6 +654,8 @@ export function Sidebar() {
               label={foundry}
               count={count}
               index={i++}
+              related={hasRelated && related.foundry === foundry}
+              rowRef={hasRelated && related.foundry === foundry ? setRowRef(`${selectedFamily}|f:${foundry}`) : undefined}
             />
           ))}
           </div>

@@ -1775,6 +1775,13 @@
   border-color: transparent;
 }
 
+/* The Collections heading wraps its collapsible button in a row div so the
+   "+" button can sit beside it. The row wrapper must not add the heading
+   padding itself, or the label gets double padding and sits further right
+   than the other section headings. */
+.sidebar-heading.sidebar-heading-row {
+  padding: 0;
+}
 .sidebar-heading-row {
   display: flex;
   align-items: center;
@@ -1793,6 +1800,37 @@
 }
 .sidebar-add:hover {
   background: var(--e2);
+}
+
+/* Round reset chip beside an active section heading: clicking clears that
+   filter block. The mark itself is a literal semicircle (dome) outline. */
+.sidebar-reset {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  transition: background var(--t-quick) ease, color var(--t-quick) ease;
+}
+.sidebar-reset:hover {
+  background: var(--e2);
+  color: var(--accent-a);
+}
+
+/* Sidebar rows that "belong" to the selected family — its tags, foundry and
+   collections. Accent-tinted instead of the solid active pill, so the two
+   states stay distinguishable. */
+.nav-row.nav-related .nav-icon,
+.nav-row.nav-related .nav-label {
+  color: var(--accent-a);
+}
+.nav-row.nav-related .nav-count {
+  color: var(--accent-a);
+  opacity: 0.75;
+}
+.sidebar-add:hover {
   color: var(--text-primary);
   border-color: rgba(var(--ink-rgb), 0.08);
 }

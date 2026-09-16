@@ -110,6 +110,12 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           st.togglePick(family.name);
           return;
         }
+        // Opening the style list also selects the family (plain click). With
+        // Ctrl/Shift the card behaves like a list row: toggle / extend the
+        // selection, so the Compare button can arm on multi-selection.
+        const mode =
+          e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
+        st.selectWith(family.name, mode, st.visibleOrder);
         setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
@@ -130,6 +136,13 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             aria-expanded={expanded}
             onClick={(e) => {
               e.stopPropagation();
+              const st = useFontStore.getState();
+              // Same as the card body: expanding selects the family — but
+              // only on a plain click; with modifiers the user is extending
+              // a selection, don't clobber it.
+              if (!st.comparePicking && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                st.select(family.name);
+              }
               setExpanded((v) => !v);
             }}
             whileHover={{ y: -1 }}

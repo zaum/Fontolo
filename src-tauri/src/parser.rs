@@ -36,11 +36,33 @@ fn detect_format(data: &[u8], path: &Path) -> FontFormat {
     }
 }
 
+/// Strips control characters and zero-width/byte-order-mark characters from a
+/// name-table string. Some fonts embed line separators or other control codes
+/// inside manufacturer/designer strings, which would render as tofu boxes.
+fn sanitize_name(s: String) -> String {
+    s.chars()
+        .filter(|c| {
+            !c.is_control()
+                && !matches!(
+                    *c as u32,
+                    0x200B..=0x200F | 0x2028 | 0x2029 | 0x2060 | 0xFEFF
+                )
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
 fn name_string(face: &ttf_parser::Face, id: u16) -> Option<String> {
     face.names()
         .into_iter()
         .filter(|n| n.name_id == id)
         .find_map(|n| n.to_string())
+        .map(sanitize_name)
+        .filter(|s| !s.is_empty())
 }
 
 const SCRIPT_PROBES: &[(&str, &[u32])] = &[
