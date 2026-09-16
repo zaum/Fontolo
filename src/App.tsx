@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { MotionConfig, motion } from "motion/react";
-import { Clock, FolderOpen, History, Monitor, Power, PowerOff, SearchX, Star, Tag as TagIcon, Type } from "lucide-react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
+import { Clock, FolderOpen, History, LoaderCircle, Monitor, Power, PowerOff, SearchX, Star, Tag as TagIcon, Type } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { DetailPanel } from "./components/DetailPanel";
 import { Titlebar } from "./components/Titlebar";
@@ -23,21 +23,56 @@ import { Onboarding } from "./components/Onboarding";
 import { ContextMenuHost, openContextMenuAt } from "./design/primitives/ContextMenu";
 import { buildFamilyMenu } from "./lib/menus";
 import { Toaster } from "./design/primitives/Toast";
-import { spring } from "./design/springs";
+import { spring, springSoft } from "./design/springs";
 import { familiesFor, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
 import { useT } from "./lib/i18n";
 
-function ScanSkeleton() {
+// Live scan readout: a spinning loader plus the "reading N of M" counter. Used
+// at the bottom of the first-run skeleton and, pinned above the content, while
+// a background (re)scan runs so the list itself can stay in place.
+function ScanStatus() {
   const t = useT();
   const { done, total } = useFontStore((s) => s.scanProgress);
+  return (
+    <div className="scan-progress tabular" role="status" aria-live="polite">
+      <LoaderCircle size={13} strokeWidth={1.5} className="scan-spinner" aria-hidden="true" />
+      {total > 0 ? t("scan.reading", { done, total }) : t("scan.finding")}
+    </div>
+  );
+}
+
+// Pinned to the bottom of the content column whenever the library is scanned
+// while fonts are already on screen (file watcher, manual rescan, imports).
+function BackgroundScanStatus() {
+  const scanning = useFontStore((s) => s.phase === "scanning");
+  const hasFonts = useFontStore((s) => s.fonts.length > 0);
+  const show = scanning && hasFonts;
+  return (
+    <div className="scan-badge-slot" aria-hidden={!show}>
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            className="scan-badge glass-e3"
+            initial={{ opacity: 0, y: 10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={springSoft}
+          >
+            <ScanStatus />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ScanSkeleton() {
   return (
     <div className="scan-skeleton">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="skeleton skeleton-card" style={{ animationDelay: `${i * 0.08}s` }} />
       ))}
-      <div className="scan-progress tabular">
-        {total > 0 ? t("scan.reading", { done, total }) : t("scan.finding")}
-      </div>
+      <ScanStatus />
     </div>
   );
 }
@@ -147,7 +182,11 @@ function MainContent() {
 
   if (area === "trash") return <TrashView />;
   if (area === "about") return <AboutView />;
-  if (phase === "scanning") return <ScanSkeleton />;
+  // Only blank the content area while there is nothing to show yet (first run).
+  // Refreshes — the file watcher, or the manual rescan button — now happen in
+  // the background: the current library stays on screen and the fresh data is
+  // swapped in when it lands.
+  if (phase === "scanning" && fonts.length === 0) return <ScanSkeleton />;
   if (families.length === 0)
     return (
       <EmptyLibrary
@@ -294,6 +333,7 @@ export default function App() {
             <main className="app-content">
               <MainContent />
             </main>
+            <BackgroundScanStatus />
           </div>
           <DetailPanel />
         </div>

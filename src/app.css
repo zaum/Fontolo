@@ -321,6 +321,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  position: relative;
 }
 
 .topbar {
@@ -1182,11 +1183,59 @@
   opacity: 0.65;
 }
 .scan-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   font-size: var(--fs-11);
   color: var(--text-tertiary);
   text-align: center;
   padding-top: 6px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Spinning loader that keeps the counter visibly "alive" during a scan. */
+.scan-spinner {
+  flex: none;
+  color: var(--accent-a);
+  animation: scan-spin 1s linear infinite;
+}
+
+@keyframes scan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-spinner {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduced"] .scan-spinner {
+  animation: none;
+}
+
+/* Bottom-pinned readout: the list stays put while a background (re)scan runs,
+   so the progress counter lives in this floating pill instead. */
+.scan-badge-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;
+  pointer-events: none;
+}
+
+.scan-badge {
+  padding: 7px 14px;
+  border-radius: 999px;
+}
+
+.scan-badge .scan-progress {
+  padding-top: 0;
+  white-space: nowrap;
 }
 
 .empty-state {

@@ -234,6 +234,36 @@ function persistPrefs(get: () => FontStore) {
   }, 600);
 }
 
+// The library fields a finished scan / warm snapshot delivers.
+type LibrarySlice = {
+  fonts: FontFace[];
+  tags: Record<string, string[]>;
+  collections: Record<string, string[]>;
+  favorites: string[];
+  notes: Record<string, string>;
+  trash: TrashEntry[];
+};
+
+// Folds a freshly loaded library into the store. Shared by the startup path
+// (warm backend snapshot or first blocking scan) and every later rescan, so the
+// derived cleanup of stale "last imported" and "session activated" entries
+// happens on both.
+function applyLibrary(
+  set: (data: Partial<FontStore>) => void,
+  get: () => FontStore,
+  data: LibrarySlice,
+) {
+  set({ ...data, phase: "ready" });
+  // Drop last-imported entries that no longer exist.
+  const names = new Set(data.fonts.map((f) => f.family));
+  const keptImported = get().lastImported.filter((n) => names.has(n));
+  if (keptImported.length !== get().lastImported.length) set({ lastImported: keptImported });
+  // Drop session entries that no longer exist or are no longer active.
+  const alive = new Set(data.fonts.filter((f) => f.active).map((f) => f.family));
+  const kept = get().sessionActivated.filter((n) => alive.has(n));
+  if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
+}
+
 export const useFontStore = create<FontStore>((set, get) => ({
   phase: "scanning",
   scanProgress: { done: 0, total: 0 },
@@ -389,7 +419,89 @@ export const useFontStore = create<FontStore>((set, get) => ({
         toast.error(t("toast.affinityError"), evt.message ?? "");
       }
     });
-    await get().rescan();
+    // The backend scans the library in the background as soon as it boots and
+    // publishes the result on "fonts:ready". Peek the finished snapshot first;
+    // only fall back to a blocking scan when it has not landed yet.
+    const warm = await ipc.peekFonts().catch(() => null);
+    if (warm) {
+      const meta = await Promise.all([
+        ipc.getTags(),
+        ipc.getCollections(),
+        ipc.getFavorites(),
+        ipc.getNotes(),
+        ipc.listTrash(),
+      ]);
+      if (get().phase === "scanning") {
+        applyLibrary(set, get, {
+          fonts: warm,
+          tags: meta[0],
+          collections: meta[1],
+          favorites: meta[2],
+          notes: meta[3],
+          trash: meta[4],
+        });
+      }
+      return;
+    }
+    // Snapshot not ready: wait for the background scan to publish. A failed
+    // scan ends the wait right away (fonts:failed) instead of leaving the
+    // skeleton up until the timeout; the fallback rescan below then surfaces
+    // the real error to the user.
+    const fonts = await new Promise<FontFace[] | null>((resolve) => {
+      let done = false;
+      const unlisten: Array<() => void> = [];
+      const finish = (value: FontFace[] | null) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        for (const off of unlisten) {
+          try {
+            off();
+          } catch {
+            /* the listener is already gone */
+          }
+        }
+        resolve(value);
+      };
+      // A listener promise can resolve after the wait is already over.
+      const attach = (p: Promise<() => void>) => {
+        void p.then((off) => (done ? off() : unlisten.push(off))).catch(() => {});
+      };
+      const timer = setTimeout(() => finish(null), 30_000);
+      attach(
+        listen<FontFace[]>("fonts:ready", (e) => {
+          finish(Array.isArray(e.payload) ? e.payload : null);
+        }),
+      );
+      attach(listen<string>("fonts:failed", () => finish(null)));
+      // Re-peek: the scan may have completed while the listener was
+      // being registered.
+      void ipc
+        .peekFonts()
+        .then((again) => {
+          if (again) finish(again);
+        })
+        .catch(() => {});
+    });
+    if (fonts) {
+      const meta = await Promise.all([
+        ipc.getTags(),
+        ipc.getCollections(),
+        ipc.getFavorites(),
+        ipc.getNotes(),
+        ipc.listTrash(),
+      ]);
+      applyLibrary(set, get, {
+        fonts,
+        tags: meta[0],
+        collections: meta[1],
+        favorites: meta[2],
+        notes: meta[3],
+        trash: meta[4],
+      });
+    } else {
+      await get().rescan();
+    }
   },
 
   rescan: async () => {
@@ -405,15 +517,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         ipc.listTrash(),
       ]);
       if (myGen !== scanGen) return;
-      set({ fonts, tags, collections, favorites, notes, trash, phase: "ready" });
-      // Drop last-imported entries that no longer exist.
-      const names = new Set(fonts.map((f) => f.family));
-      const keptImported = get().lastImported.filter((n) => names.has(n));
-      if (keptImported.length !== get().lastImported.length) set({ lastImported: keptImported });
-      // Drop session entries that no longer exist or are no longer active.
-      const alive = new Set(fonts.filter((f) => f.active).map((f) => f.family));
-      const kept = get().sessionActivated.filter((n) => alive.has(n));
-      if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
+      applyLibrary(set, get, { fonts, tags, collections, favorites, notes, trash });
     } catch (e) {
       if (myGen !== scanGen) return;
       set({ phase: "error" });

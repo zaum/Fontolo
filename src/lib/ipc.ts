@@ -93,6 +93,7 @@ export const ipc = {
   affinitySessionActivate: (paths: string[]) =>
     invoke<string[]>("affinity_session_activate", { paths }),
   scanFonts: () => invoke<FontFace[]>("scan_fonts"),
+  peekFonts: () => invoke<FontFace[] | null>("peek_fonts"),
   setFontActive: (path: string, active: boolean) =>
     invoke<void>("set_font_active", { path, active }),
   setFontsActive: (paths: string[], active: boolean) =>

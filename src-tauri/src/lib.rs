@@ -13,10 +13,100 @@ mod watcher;
 use font_types::{FontFace, FontSource, TrashEntry};
 use std::collections::HashMap;
 use store::Store;
-use tauri::{Manager, State};
+use serde::Serialize;
+use tauri::{Emitter, Manager, State};
 
-#[tauri::command]
-async fn scan_fonts(app: tauri::AppHandle) -> Result<Vec<FontFace>, String> {
+/// Faces from a completed scan, shared behind an `Arc` so handing them around
+/// is a pointer copy. The cache lock is therefore held only for that copy, not
+/// during a deep clone of every face in the library. Serializes as the plain
+/// face array, so the shape the frontend receives is unchanged.
+#[derive(Clone)]
+pub struct FontSnapshot(std::sync::Arc<Vec<FontFace>>);
+
+impl FontSnapshot {
+    fn new(faces: Vec<FontFace>) -> Self {
+        Self(std::sync::Arc::new(faces))
+    }
+
+    /// A private copy of the faces, so a caller can modify them (activation
+    /// stamping) without touching what the cache hands out.
+    fn owned(&self) -> Vec<FontFace> {
+        (*self.0).clone()
+    }
+}
+
+impl Serialize for FontSnapshot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.as_slice().serialize(serializer)
+    }
+}
+
+/// Cached scan result plus the error of the last finished scan. Held in one
+/// place so a waiter can tell "the scan I was waiting for failed" apart from
+/// "a fresh snapshot landed" — previously a failed scan silently served the
+/// stale library as if the rescan had succeeded.
+struct ScanState {
+    snapshot: Option<FontSnapshot>,
+    error: Option<String>,
+}
+
+fn scan_state() -> &'static std::sync::Mutex<ScanState> {
+    static CELL: std::sync::OnceLock<std::sync::Mutex<ScanState>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        std::sync::Mutex::new(ScanState {
+            snapshot: None,
+            error: None,
+        })
+    })
+}
+
+/// Single-flight guard for library scans. An async mutex rather than an atomic
+/// flag on purpose: if the task that holds it is dropped mid-scan (webview
+/// reload, panic, shutdown), the runtime releases the guard, so the next caller
+/// can still scan instead of waiting forever on a flag nobody resets.
+fn scan_lock() -> &'static tokio::sync::Mutex<()> {
+    static CELL: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+/// Completion counter of scans. A caller that arrived while a scan was already
+/// running waits here until the counter advances instead of scanning the whole
+/// library a second time. The counter also advances on failure, so waiters are
+/// never left blocked on a scan that is already over.
+fn scan_watch() -> &'static tokio::sync::watch::Sender<u64> {
+    static CELL: std::sync::OnceLock<tokio::sync::watch::Sender<u64>> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| tokio::sync::watch::channel(0u64).0)
+}
+
+/// How long a caller waits for an in-flight scan before concluding it is dead
+/// and running its own. Generous: a large library on a slow drive may take a
+/// while, and giving up early would only duplicate the work.
+const SCAN_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Re-applies the current activation state to faces served from the cache:
+/// activations may have changed since the scan completed. The copy happens off
+/// the async runtime thread and without holding the cache lock, since a library
+/// can hold tens of thousands of faces.
+async fn stamp_active(
+    app: &tauri::AppHandle,
+    snap: FontSnapshot,
+) -> Result<FontSnapshot, String> {
+    let probe = activation::probe();
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<FontSnapshot, String> {
+        let store: State<Store> = app.state();
+        let state = store.0.lock().map_err(|e| e.to_string())?;
+        let mut faces = snap.owned();
+        for f in &mut faces {
+            f.active = activation::is_active(&probe, &state, &f);
+        }
+        Ok(FontSnapshot::new(faces))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+async fn scan_all_faces(app: &tauri::AppHandle) -> Result<Vec<FontFace>, String> {
     let (extra, library_dir, linked) = {
         let store: State<Store> = app.state();
         let state = store.0.lock().map_err(|e| e.to_string())?;
@@ -78,6 +168,114 @@ async fn scan_fonts(app: tauri::AppHandle) -> Result<Vec<FontFace>, String> {
         }
     }
     Ok(faces)
+}
+
+/// Runs a full scan. Caller must hold [`scan_lock`], which keeps the library
+/// from being walked twice at once. Publishes the result in the cache and on
+/// the `fonts:ready` event, or the failure on `fonts:failed`. Always publishes
+/// something, even on failure, so coalesced waiters wake up either way.
+async fn run_scan(app: &tauri::AppHandle) -> Result<FontSnapshot, String> {
+    let out = match scan_all_faces(app).await {
+        Ok(faces) => {
+            let snap = FontSnapshot::new(faces);
+            if let Ok(mut state) = scan_state().lock() {
+                state.snapshot = Some(snap.clone());
+                state.error = None;
+            }
+            let _ = app.emit("fonts:ready", &snap);
+            Ok(snap)
+        }
+        Err(e) => {
+            if let Ok(mut state) = scan_state().lock() {
+                state.error = Some(e.clone());
+            }
+            // Tell the frontend that no snapshot is coming, so it does not sit
+            // on its skeleton until its own timeout expires.
+            let _ = app.emit("fonts:failed", &e);
+            Err(e)
+        }
+    };
+    let gen = *scan_watch().borrow();
+    let _ = scan_watch().send(gen + 1);
+    out
+}
+
+/// Single-flight scan: either performs the full scan (holding the scan lock) or
+/// waits for the one already in flight and serves its snapshot, so the library
+/// is never read twice at the same time.
+async fn scan_coalesced(app: &tauri::AppHandle) -> Result<FontSnapshot, String> {
+    let mut rx = scan_watch().subscribe();
+    let start_gen = *rx.borrow();
+    // try_lock: nothing is scanning, so this caller does the work.
+    if let Ok(_guard) = scan_lock().try_lock() {
+        return run_scan(app).await;
+    }
+    // A scan is already in flight (usually the startup one): wait for its
+    // completion instead of walking every file a second time. The timeout is
+    // the safety net — a waiter must never block forever on a scan that died.
+    let finished = loop {
+        match tokio::time::timeout(SCAN_WAIT_TIMEOUT, rx.changed()).await {
+            Ok(Ok(())) => {
+                if *rx.borrow() > start_gen {
+                    break true;
+                }
+            }
+            Ok(Err(_)) => break false,
+            Err(_elapsed) => break false,
+        }
+    };
+    if finished {
+        // Take what the waiter needs out of the state and release the lock
+        // before the first await — a std MutexGuard must not live across one.
+        enum Outcome {
+            Failed(String),
+            Ready(FontSnapshot),
+            Empty,
+        }
+        let outcome = {
+            let state = scan_state().lock().map_err(|e| e.to_string())?;
+            // Failures are reported as failures: serving the previous library
+            // here would make a broken rescan look successful.
+            if let Some(err) = &state.error {
+                Outcome::Failed(err.clone())
+            } else if let Some(snap) = &state.snapshot {
+                Outcome::Ready(snap.clone())
+            } else {
+                Outcome::Empty
+            }
+        };
+        match outcome {
+            Outcome::Failed(err) => return Err(err),
+            Outcome::Ready(snap) => return stamp_active(app, snap).await,
+            Outcome::Empty => {}
+        }
+    }
+    // No result and no scan running: the lock is free, so the scan we waited
+    // for is gone. Recover by scanning instead of reporting a stale failure.
+    if let Ok(_guard) = scan_lock().try_lock() {
+        return run_scan(app).await;
+    }
+    Err("scan timed out".into())
+}
+
+#[tauri::command]
+async fn scan_fonts(app: tauri::AppHandle) -> Result<FontSnapshot, String> {
+    scan_coalesced(&app).await
+}
+
+/// The last completed scan result, if any. Lets the frontend show the
+/// library instantly at startup instead of staring at a skeleton.
+#[tauri::command]
+async fn peek_fonts(app: tauri::AppHandle) -> Result<Option<FontSnapshot>, String> {
+    let cached = scan_state()
+        .lock()
+        .map_err(|e| e.to_string())?
+        .snapshot
+        .clone();
+    match cached {
+        Some(snap) => Ok(Some(stamp_active(&app, snap).await?)),
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -621,10 +819,19 @@ pub fn run() {
                 affinity::tick(&affinity_app);
                 std::thread::sleep(std::time::Duration::from_secs(2));
             });
+            // Scan the library in the background right away: by the time the
+            // webview finishes loading, the result is usually cached and the
+            // UI can start from it instead of a skeleton. scan_coalesced joins
+            // a scan that is already in flight instead of starting a second.
+            let scan_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = scan_coalesced(&scan_app).await;
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             scan_fonts,
+            peek_fonts,
             set_font_active,
             set_fonts_active,
             set_fonts_active_session,
@@ -669,4 +876,62 @@ pub fn run() {
                 revert_session_activations(app);
             }
         });
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use font_types::{Classification, FontFormat};
+
+    fn face(id: &str) -> FontFace {
+        FontFace {
+            id: id.to_string(),
+            path: format!("/fonts/{id}.ttf"),
+            preview_path: None,
+            face_index: 0,
+            family: "Inter".to_string(),
+            style: "Regular".to_string(),
+            postscript_name: None,
+            foundry: None,
+            license: None,
+            license_url: None,
+            format: FontFormat::Ttf,
+            is_variable: false,
+            axes: Vec::new(),
+            weight: 400,
+            italic: false,
+            monospaced: false,
+            classification: Classification::Sans,
+            scripts: vec!["latin".to_string()],
+            file_size: 1024,
+            source: FontSource::Managed,
+            deactivatable: true,
+            active: false,
+        }
+    }
+
+    /// The frontend reads the scan result as a plain face array, so the shared
+    /// snapshot must serialize exactly like the owned vector it wraps — an
+    /// accidental object wrapper (e.g. `{"0":…}` or `{"faces":[…]}`) would
+    /// break every view at once.
+    #[test]
+    fn snapshot_serializes_as_face_array() {
+        let snap = FontSnapshot::new(vec![face("a"), face("b")]);
+        let shared = serde_json::to_value(&snap).expect("snapshot serializes");
+        let plain = serde_json::to_value(snap.owned()).expect("faces serialize");
+
+        assert_eq!(shared, plain);
+        assert_eq!(shared.as_array().map(|a| a.len()), Some(2));
+        assert_eq!(shared[0]["id"], "a");
+    }
+
+    /// A clone of the snapshot must share the same faces rather than copy
+    /// them: that is what keeps the cache lock held for a pointer copy only.
+    #[test]
+    fn snapshot_clone_shares_faces() {
+        let snap = FontSnapshot::new(vec![face("a")]);
+        let copy = snap.clone();
+
+        assert_eq!(std::sync::Arc::strong_count(&snap.0), 2);
+        assert_eq!(std::sync::Arc::as_ptr(&snap.0), std::sync::Arc::as_ptr(&copy.0));
+    }
 }
