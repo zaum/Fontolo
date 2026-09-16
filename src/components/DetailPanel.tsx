@@ -457,16 +457,6 @@ function ConflictFileCard({ path }: { path: string }) {
 
   return (
     <div className="conflict-file">
-      <button
-        className="path-link detail-mono"
-        onClick={() =>
-          revealItemInDir(path).catch(() => toast.error(t("toast.couldntOpenFileManager")))
-        }
-        title={path}
-      >
-        <FolderOpen size={11} strokeWidth={1.5} />
-        <span className="conflict-file-name">{pathBasename(path)}</span>
-      </button>
       <div className="conflict-file-meta">
         {rep && (
           <span className="conflict-file-family">
@@ -480,7 +470,16 @@ function ConflictFileCard({ path }: { path: string }) {
           </span>
         )}
       </div>
-      <span className="conflict-file-path detail-mono">{path}</span>
+      <button
+        className="conflict-file-path conflict-path-btn detail-mono"
+        onClick={() =>
+          revealItemInDir(path).catch(() => toast.error(t("toast.couldntOpenFileManager")))
+        }
+        title={path}
+      >
+        <FolderOpen size={11} strokeWidth={1.5} />
+        <span>{path}</span>
+      </button>
       {isSystem ? (
         <span className="conflict-system-note">{t("detail.conflictSystemProtected")}</span>
       ) : (
@@ -863,7 +862,7 @@ export function DetailPanel() {
                 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
               >
                 <div className="conflict-title">
-                  <AlertTriangle size={13} strokeWidth={1.5} />
+                  <AlertTriangle size={13} strokeWidth={2} fill="currentColor" className="conflict-title-icon" />
                   {t("detail.conflictTitle")}
                 </div>
                 <p className="conflict-sub">{t("detail.conflictBody")}</p>

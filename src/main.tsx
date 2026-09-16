@@ -5,6 +5,9 @@ import "@fontsource-variable/jetbrains-mono";
 import "./design/tokens.css";
 import "./app.css";
 import App from "./App";
+import { applyAccent, loadAccent } from "./lib/accent";
+
+applyAccent(loadAccent());
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ChevronRight, Star } from "lucide-react";
-import { memo, useState } from "react";
+import { AlertTriangle, ChevronRight, Info, Star } from "lucide-react";
+import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSnappy, springSoft, staggerDelay } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
@@ -78,13 +78,19 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const sampleText = useFontStore((s) => s.sampleText);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
-  const selectWith = useFontStore((s) => s.selectWith);
+  const select = useFontStore((s) => s.select);
   const selected = useFontStore((s) => s.selection.includes(family.name));
+  const detailsOpen = useFontStore((s) => s.selectedFamily === family.name);
   const favorite = useFontStore((s) => s.favorites.includes(family.name));
   const toggleFavorite = useFontStore((s) => s.toggleFavorite);
   const hasActiveConflict = useFontStore((s) => activeConflictsFor(s.fonts).has(family.name));
   const hasDormantConflict = useFontStore((s) => conflictsFor(s.fonts).has(family.name));
   const [expanded, setExpanded] = useState(false);
+  const expandSignal = useFontStore((s) => s.expandSignal);
+  const expandOpen = useFontStore((s) => s.expandOpen);
+  useEffect(() => {
+    setExpanded(expandOpen);
+  }, [expandSignal]);
 
   const size = SIZES[sizeIndex];
   const lead = family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
@@ -95,30 +101,16 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
     <motion.article
       className={`family-card ${selected ? "card-selected" : ""}`}
       data-family={family.name}
-      tabIndex={0}
-      role="button"
-      aria-label={family.name}
-      aria-pressed={selected}
       onClick={(e) => {
-        // Clicks on interactive controls (toggle, star, expand) must not
-        // select the card. React retargets `click` to the nearest common
-        // ancestor when the pressed element is replaced mid-press (motion
-        // layout re-render), so the pill's stopPropagation is not always
-        // enough — filter at the card level as well.
+        // Only the body toggles the style list — buttons (star, pill,
+        // info strip, expander) handle themselves.
         if ((e.target as HTMLElement).closest("button")) return;
         const st = useFontStore.getState();
-
         if (st.comparePicking) {
           st.togglePick(family.name);
           return;
         }
-        const mode = e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
-        selectWith(family.name, mode, st.visibleOrder);
-      }}
-      onKeyDown={(e) => {
-        if (e.key !== "Enter" || e.target !== e.currentTarget) return;
-        e.preventDefault();
-        selectWith(family.name, "single", useFontStore.getState().visibleOrder);
+        setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
 
@@ -158,11 +150,11 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         <span className="card-spacer" />
         {hasActiveConflict ? (
           <span
-            className="conflict-badge"
+            className="conflict-badge conflict-badge-filled"
             title=""
             aria-label={t("card.conflict")}
           >
-            <AlertTriangle size={13} strokeWidth={1.5} />
+            <AlertTriangle size={13} strokeWidth={2} fill="currentColor" />
           </span>
         ) : (
           hasDormantConflict && (
@@ -256,6 +248,22 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           </motion.div>
         )}
       </AnimatePresence>
+
+      <button
+        className={`card-info-strip ${detailsOpen ? "card-info-strip-open" : ""}`}
+        aria-label={t("card.openDetails", { name: family.name })}
+        title={t("card.openDetails", { name: family.name })}
+        onClick={() => {
+          const st = useFontStore.getState();
+          if (st.comparePicking) {
+            st.togglePick(family.name);
+            return;
+          }
+          select(detailsOpen ? null : family.name);
+        }}
+      >
+        <Info size={17} strokeWidth={1.75} />
+      </button>
     </motion.article>
   );
 });

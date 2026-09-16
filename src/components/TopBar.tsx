@@ -4,11 +4,13 @@ import {
   Check,
   Columns2,
   Filter,
+  FoldVertical,
   LayoutGrid,
   List,
   RefreshCw,
   Search,
   Type,
+  UnfoldVertical,
   X,
 } from "lucide-react";
 import { useState, type CSSProperties } from "react";
@@ -191,6 +193,27 @@ function FilterMenu() {
   );
 }
 
+function ExpandAllButton() {
+  const t = useT();
+  const expandOpen = useFontStore((s) => s.expandOpen);
+  const setAllExpanded = useFontStore((s) => s.setAllExpanded);
+  return (
+    <motion.button
+      className="rescan-btn"
+      aria-label={t(expandOpen ? "top.collapseAllStyles" : "top.expandAllStyles")}
+      title={t(expandOpen ? "top.collapseAllStyles" : "top.expandAllStyles")}
+      onClick={() => setAllExpanded(!expandOpen)}
+      whileTap={{ scale: 0.94 }}
+    >
+      {expandOpen ? (
+        <FoldVertical size={14} strokeWidth={1.5} />
+      ) : (
+        <UnfoldVertical size={14} strokeWidth={1.5} />
+      )}
+    </motion.button>
+  );
+}
+
 function RescanButton() {
   const t = useT();
   const rescan = useFontStore((s) => s.rescan);
@@ -264,6 +287,7 @@ export function TopBar() {
   const setViewMode = useFontStore((s) => s.setViewMode);
   const search = useFontStore((s) => s.search);
   const setSearch = useFontStore((s) => s.setSearch);
+  const visibleCount = useFontStore((s) => s.visibleOrder.length);
 
   const fill = (sizeIndex / (SIZES.length - 1)) * 100;
 
@@ -294,6 +318,7 @@ export function TopBar() {
           </button>
         )}
       </div>
+      <span className="topbar-count tabular">{visibleCount}</span>
 
       <div className="topbar-field topbar-sample">
         <Type size={14} strokeWidth={1.5} className="field-icon" />
@@ -320,6 +345,8 @@ export function TopBar() {
       </div>
 
       <FilterMenu />
+
+      <ExpandAllButton />
 
       <SortMenu />
 

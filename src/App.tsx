@@ -24,7 +24,7 @@ import { ContextMenuHost, openContextMenuAt } from "./design/primitives/ContextM
 import { buildFamilyMenu } from "./lib/menus";
 import { Toaster } from "./design/primitives/Toast";
 import { spring } from "./design/springs";
-import { familiesFor, selectVisibleFamilies, useFontStore, type Nav } from "./state/fontStore";
+import { familiesFor, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
 import { useT } from "./lib/i18n";
 
 function ScanSkeleton() {
@@ -42,7 +42,17 @@ function ScanSkeleton() {
   );
 }
 
-function EmptyLibrary({ searching, nav }: { searching: boolean; nav: Nav }) {
+function EmptyLibrary({
+  searching,
+  browse,
+  cols,
+  tags,
+}: {
+  searching: boolean;
+  browse: BrowseKind;
+  cols: string[];
+  tags: string[];
+}) {
   const t = useT();
 
   let icon = <Type size={26} strokeWidth={1.5} />;
@@ -52,35 +62,35 @@ function EmptyLibrary({ searching, nav }: { searching: boolean; nav: Nav }) {
     icon = <SearchX size={26} strokeWidth={1.5} />;
     title = t("empty.search.title");
     hint = t("empty.search.body");
-  } else if (nav.kind === "favorites") {
+  } else if (browse === "favorites") {
     icon = <Star size={26} strokeWidth={1.5} />;
     title = t("empty.favorites.title");
     hint = t("empty.favorites.body");
-  } else if (nav.kind === "lastImported") {
+  } else if (browse === "lastImported") {
     icon = <History size={26} strokeWidth={1.5} />;
     title = t("empty.lastImported.title");
     hint = t("empty.lastImported.body");
-  } else if (nav.kind === "collection") {
+  } else if (cols.length === 1 && tags.length === 0) {
     icon = <FolderOpen size={26} strokeWidth={1.5} />;
     title = t("empty.collection.title");
-    hint = t("empty.collection.body", { name: nav.name });
-  } else if (nav.kind === "tag") {
+    hint = t("empty.collection.body", { name: cols[0] });
+  } else if (tags.length === 1 && cols.length === 0) {
     icon = <TagIcon size={26} strokeWidth={1.5} />;
     title = t("empty.tag.title");
     hint = t("empty.tag.body");
-  } else if (nav.kind === "activated") {
+  } else if (browse === "activated") {
     icon = <Power size={26} strokeWidth={1.5} />;
     title = t("empty.activated.title");
     hint = t("empty.activated.body");
-  } else if (nav.kind === "activatedSession") {
+  } else if (browse === "activatedSession") {
     icon = <Clock size={26} strokeWidth={1.5} />;
     title = t("empty.session.title");
     hint = t("empty.session.body");
-  } else if (nav.kind === "deactivated") {
+  } else if (browse === "deactivated") {
     icon = <PowerOff size={26} strokeWidth={1.5} />;
     title = t("empty.deactivated.title");
     hint = t("empty.deactivated.body");
-  } else if (nav.kind === "system") {
+  } else if (browse === "system") {
     icon = <Monitor size={26} strokeWidth={1.5} />;
     title = t("empty.system.title");
     hint = t("empty.system.body");
@@ -101,7 +111,10 @@ function EmptyLibrary({ searching, nav }: { searching: boolean; nav: Nav }) {
 
 function MainContent() {
   const phase = useFontStore((s) => s.phase);
-  const nav = useFontStore((s) => s.nav);
+  const area = useFontStore((s) => s.area);
+  const browse = useFontStore((s) => s.browseSel);
+  const colSel = useFontStore((s) => s.colSel);
+  const tagSel = useFontStore((s) => s.tagSel);
   const viewMode = useFontStore((s) => s.viewMode);
   const fonts = useFontStore((s) => s.fonts);
   const tags = useFontStore((s) => s.tags);
@@ -120,9 +133,9 @@ function MainContent() {
     () =>
       selectVisibleFamilies({
         fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search,
-        classFilter, scriptFilter, variableOnly, nav, sort,
+        classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, sort,
       }),
-    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, nav, sort],
+    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, sort],
   );
 
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);
@@ -131,13 +144,15 @@ function MainContent() {
     useFontStore.setState({ visibleOrder });
   }, [visibleOrder]);
 
-  if (nav.kind === "trash") return <TrashView />;
-  if (nav.kind === "about") return <AboutView />;
+  if (area === "trash") return <TrashView />;
+  if (area === "about") return <AboutView />;
   if (phase === "scanning") return <ScanSkeleton />;
   if (families.length === 0)
     return (
       <EmptyLibrary
-        nav={nav}
+        browse={browse}
+        cols={colSel}
+        tags={tagSel}
         searching={
           search.trim().length > 0 ||
           classFilter.length > 0 ||

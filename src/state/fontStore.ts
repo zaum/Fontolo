@@ -12,6 +12,7 @@ import {
   type TrashEntry,
 } from "../lib/ipc";
 import { matchAffinityFonts, type AffinityEvent } from "../lib/affinity";
+import { applyAccent, loadAccent, saveAccent } from "../lib/accent";
 import { toast } from "../design/primitives/Toast";
 import { setSoundLevel, type SoundLevel } from "../lib/sound";
 import { applyTheme, type ThemePref } from "../lib/theme";
@@ -51,6 +52,21 @@ export type Nav =
   | { kind: "deactivated" }
   | { kind: "system" }
   | { kind: "lastImported" };
+
+export type TagCollectionNav =
+  | { kind: "tag"; tag: string }
+  | { kind: "collection"; name: string };
+
+export type BrowseKind =
+  | "library"
+  | "favorites"
+  | "lastImported"
+  | "activated"
+  | "activatedSession"
+  | "deactivated"
+  | "system";
+
+export type AreaKind = "main" | "trash" | "about";
 
 export interface Family {
   name: string;
@@ -109,12 +125,18 @@ interface FontStore {
   viewMode: ViewMode;
   sort: SortMode;
   search: string;
+  expandSignal: number;
+  expandOpen: boolean;
+  accent: string;
 
   classFilter: Classification[];
 
   scriptFilter: string[];
   variableOnly: boolean;
-  nav: Nav;
+  browseSel: BrowseKind;
+  colSel: string[];
+  tagSel: string[];
+  area: AreaKind;
   selectedFamily: string | null;
 
   pendingCollectionFor: string | null;
@@ -149,6 +171,8 @@ interface FontStore {
   closeCompare: () => void;
   setComparePicking: (on: boolean) => void;
   togglePick: (family: string) => void;
+  setAllExpanded: (open: boolean) => void;
+  setAccent: (hex: string) => void;
   setSettingsOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
@@ -177,6 +201,9 @@ interface FontStore {
   exportLibraryData: (dest: string) => Promise<void>;
   importLibraryData: (src: string) => Promise<void>;
   setNav: (n: Nav) => void;
+  setBrowse: (b: BrowseKind) => void;
+  setFilterSel: (cols: string[], tags: string[]) => void;
+  setArea: (a: AreaKind) => void;
   select: (family: string | null) => void;
 }
 
@@ -240,10 +267,16 @@ export const useFontStore = create<FontStore>((set, get) => ({
   viewMode: "grid",
   sort: "name",
   search: "",
+  expandSignal: 0,
+  expandOpen: false,
+  accent: loadAccent(),
   classFilter: [],
   scriptFilter: [],
   variableOnly: false,
-  nav: { kind: "library" },
+  browseSel: "library",
+  colSel: [],
+  tagSel: [],
+  area: "main",
   selectedFamily: null,
   pendingCollectionFor: null,
   duplicateReport: null,
@@ -335,10 +368,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
           try {
             const activated = await ipc.affinitySessionActivate(paths);
             if (activated.length === 0) return;
-            const titles = [...new Set(evt.docs.map((d) => d.title))].join(", ");
+            const titles = [...new Set(evt.docs.map((d) => d.title))].join("\n");
             toast.success(
-              t("toast.affinityActivated", { count: activated.length, docs: titles }),
-              undefined,
+              t("toast.affinityActivated", { count: activated.length }),
+              titles || undefined,
               "activate",
             );
             await get().rescan();
@@ -711,10 +744,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
     const prev = get().collections;
     const next = { ...prev };
     delete next[name];
-    const nav = get().nav;
     set({
       collections: next,
-      nav: nav.kind === "collection" && nav.name === name ? { kind: "library" } : nav,
+      colSel: get().colSel.filter((c) => c !== name),
     });
     try {
       await ipc.deleteCollection(name);
@@ -734,13 +766,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
     }
     const next = { ...prev, [clean]: prev[from] ?? [] };
     delete next[from];
-    const nav = get().nav;
     set({
       collections: next,
-      nav:
-        nav.kind === "collection" && nav.name === from
-          ? { kind: "collection", name: clean }
-          : nav,
+      colSel: get().colSel.map((c) => (c === from ? clean : c)),
     });
     try {
       await ipc.renameCollection(from, clean);
@@ -919,6 +947,13 @@ export const useFontStore = create<FontStore>((set, get) => ({
   openCompare: (families) => set({ compare: families.slice(0, 4), comparePicking: false }),
   closeCompare: () => set({ compare: null }),
   setComparePicking: (comparePicking) => set({ comparePicking }),
+  setAllExpanded: (expandOpen) =>
+    set((s) => ({ expandOpen, expandSignal: s.expandSignal + 1 })),
+  setAccent: (accent) => {
+    saveAccent(accent);
+    applyAccent(accent);
+    set({ accent });
+  },
 
   togglePick: (family) =>
     set((s) => ({
@@ -1145,7 +1180,53 @@ export const useFontStore = create<FontStore>((set, get) => ({
       toast.error(t("toast.importFailed"), String(e));
     }
   },
-  setNav: (nav) => set({ nav, selectedFamily: null, selection: [] }),
+  setNav: (nav) => {
+    // Compatibility entry point (command palette, onboarding): an exclusive
+    // jump — clears the other blocks and returns to the main area.
+    if (nav.kind === "trash") {
+      set({ area: "trash", selectedFamily: null, selection: [] });
+      return;
+    }
+    if (nav.kind === "about") {
+      set({ area: "about", selectedFamily: null, selection: [] });
+      return;
+    }
+    if (nav.kind === "tag") {
+      set({
+        area: "main",
+        browseSel: "library",
+        colSel: [],
+        tagSel: [nav.tag],
+        selectedFamily: null,
+        selection: [],
+      });
+      return;
+    }
+    if (nav.kind === "collection") {
+      set({
+        area: "main",
+        browseSel: "library",
+        colSel: [nav.name],
+        tagSel: [],
+        selectedFamily: null,
+        selection: [],
+      });
+      return;
+    }
+    set({
+      area: "main",
+      browseSel: nav.kind,
+      colSel: [],
+      tagSel: [],
+      selectedFamily: null,
+      selection: [],
+    });
+  },
+  setBrowse: (browseSel) =>
+    set({ area: "main", browseSel, selectedFamily: null, selection: [] }),
+  setFilterSel: (colSel, tagSel) =>
+    set({ area: "main", colSel, tagSel, selectedFamily: null, selection: [] }),
+  setArea: (area) => set({ area, selectedFamily: null, selection: [] }),
   select: (selectedFamily) =>
     set({ selectedFamily, selection: selectedFamily ? [selectedFamily] : [] }),
 }));
@@ -1206,7 +1287,9 @@ export function selectVisibleFamilies(s: {
   classFilter: Classification[];
   scriptFilter: string[];
   variableOnly: boolean;
-  nav: Nav;
+  browse: BrowseKind;
+  selCols: string[];
+  selTags: string[];
   sort: SortMode;
 }): Family[] {
   const families = [...familiesFor(s.fonts, s.tags).values()];
@@ -1221,36 +1304,34 @@ export function selectVisibleFamilies(s: {
   if (s.variableOnly) {
     out = out.filter((f) => f.isVariable);
   }
-  if (s.nav.kind === "tag") {
-    const tag = s.nav.tag;
-    out = out.filter((f) => f.tags.includes(tag));
+  // Browse is the base set; selected collections/tags narrow it further.
+  let browsePred: ((f: Family) => boolean) | null = null;
+  if (s.browse === "favorites") browsePred = (f) => s.favorites.includes(f.name);
+  if (s.browse === "lastImported") browsePred = (f) => s.lastImported.includes(f.name);
+  if (s.browse === "activated") {
+    browsePred = (f) =>
+      f.active &&
+      !s.sessionActivated.includes(f.name) &&
+      !(f.faces.length > 0 && f.faces.every((face) => face.source === "system"));
   }
-  if (s.nav.kind === "collection") {
-    const members = s.collections[s.nav.name] ?? [];
-    out = out.filter((f) => members.includes(f.name));
+  if (s.browse === "activatedSession") {
+    browsePred = (f) => s.sessionActivated.includes(f.name);
   }
-  if (s.nav.kind === "favorites") {
-    out = out.filter((f) => s.favorites.includes(f.name));
+  if (s.browse === "deactivated") browsePred = (f) => !f.active;
+  if (s.browse === "system") {
+    browsePred = (f) =>
+      f.faces.length > 0 && f.faces.every((face) => face.source === "system");
   }
-  if (s.nav.kind === "lastImported") {
-    out = out.filter((f) => s.lastImported.includes(f.name));
+  let groupPred: ((f: Family) => boolean) | null = null;
+  if (s.selCols.length > 0 || s.selTags.length > 0) {
+    const members = new Set(s.selCols.flatMap((c) => s.collections[c] ?? []));
+    groupPred = (f) =>
+      members.has(f.name) || s.selTags.some((tg) => f.tags.includes(tg));
   }
-  if (s.nav.kind === "activated") {
+  if (browsePred || groupPred) {
     out = out.filter(
-      (f) =>
-        f.active &&
-        !s.sessionActivated.includes(f.name) &&
-        !(f.faces.length > 0 && f.faces.every((face) => face.source === "system")),
+      (f) => (!browsePred || browsePred(f)) && (!groupPred || groupPred(f)),
     );
-  }
-  if (s.nav.kind === "activatedSession") {
-    out = out.filter((f) => s.sessionActivated.includes(f.name));
-  }
-  if (s.nav.kind === "deactivated") {
-    out = out.filter((f) => !f.active);
-  }
-  if (s.nav.kind === "system") {
-    out = out.filter((f) => f.faces.length > 0 && f.faces.every((face) => face.source === "system"));
   }
   if (q) {
     out = out.filter(

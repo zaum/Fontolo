@@ -3,48 +3,50 @@ import { Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Pow
 import { useEffect, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
-import { allTags, familiesFor, useFontStore, type Family, type Nav } from "../state/fontStore";
+import { allTags, familiesFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
 
-function navKey(n: Nav): string {
-  if (n.kind === "tag") return `tag:${n.tag}`;
-  if (n.kind === "collection") return `col:${n.name}`;
-  if (n.kind === "favorites") return "favorites";
-  return n.kind;
-}
+// Anchor for shift+click range selection, and the key of the last picked
+// row — it owns the gliding pill inside a multi-selected section.
+let sidebarAnchor: { list: "cols" | "tags"; name: string } | null = null;
+let sidebarLead: string | null = null;
 
 function NavRow({
-  nav,
+  active,
+  lead,
+  pillId,
+  onPick,
   icon,
   label,
   count,
   index,
   onContextMenu,
 }: {
-  nav: Nav;
+  active: boolean;
+  lead: boolean;
+  pillId: string;
+  onPick: (e: React.MouseEvent) => void;
   icon: React.ReactNode;
   label: string;
   count?: number;
   index: number;
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
-  const current = useFontStore((s) => s.nav);
-  const setNav = useFontStore((s) => s.setNav);
-  const active = navKey(current) === navKey(nav);
   return (
     <motion.button
       className={`nav-row ${active ? "nav-active" : ""}`}
-      onClick={() => setNav(nav)}
+      onClick={onPick}
       onContextMenu={onContextMenu}
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ ...springSoft, delay: staggerDelay(index) }}
       whileTap={{ scale: 0.97 }}
     >
-      {active && (
-        <motion.span className="nav-pill" layoutId="nav-pill" transition={spring} />
+      {active && lead && (
+        <motion.span className="nav-pill" layoutId={pillId} transition={spring} />
       )}
+      {active && !lead && <span className="nav-pill" />}
       <span className="nav-icon">{icon}</span>
       <span className="nav-label">{label}</span>
       {count !== undefined && <span className="nav-count tabular">{count}</span>}
@@ -160,12 +162,85 @@ export function Sidebar() {
   ).length;
   const tagCounts = allTags(tags);
   const collectionNames = Object.keys(collections).sort((a, b) => a.localeCompare(b));
+  const browse = useFontStore((s) => s.browseSel);
+  const colSel = useFontStore((s) => s.colSel);
+  const tagSel = useFontStore((s) => s.tagSel);
+  const area = useFontStore((s) => s.area);
+  const setBrowse = useFontStore((s) => s.setBrowse);
+  const setFilterSel = useFontStore((s) => s.setFilterSel);
+  const setArea = useFontStore((s) => s.setArea);
+
+  const pickBrowse = (b: BrowseKind) => {
+    if (b === "library") {
+      // Library resets every block.
+      setFilterSel([], []);
+      setBrowse("library");
+    } else {
+      setBrowse(b);
+    }
+    sidebarLead = b;
+    sidebarAnchor = null;
+  };
+
+  const pickFromList = (
+    e: React.MouseEvent,
+    list: "cols" | "tags",
+    name: string,
+  ) => {
+    const st = useFontStore.getState();
+    const names = list === "cols" ? collectionNames : [...tagCounts.keys()];
+    const sel = list === "cols" ? st.colSel : st.tagSel;
+    if (e.shiftKey) {
+      if (sidebarAnchor && sidebarAnchor.list === list && names.includes(sidebarAnchor.name)) {
+        const a = names.indexOf(sidebarAnchor.name);
+        const b = names.indexOf(name);
+        const range = names.slice(Math.min(a, b), Math.max(a, b) + 1);
+        const merged = [...sel];
+        for (const r of range) if (!merged.includes(r)) merged.push(r);
+        if (list === "cols") setFilterSel(merged, st.tagSel);
+        else setFilterSel(st.colSel, merged);
+      } else if (list === "cols") {
+        setFilterSel([name], st.tagSel);
+        sidebarAnchor = { list, name };
+      } else {
+        setFilterSel(st.colSel, [name]);
+        sidebarAnchor = { list, name };
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      const next = sel.includes(name) ? sel.filter((n) => n !== name) : [...sel, name];
+      if (list === "cols") setFilterSel(next, st.tagSel);
+      else setFilterSel(st.colSel, next);
+      sidebarAnchor = { list, name };
+    } else if (list === "cols") {
+      // Plain click on an already selected row removes it; otherwise isolates it.
+      setFilterSel(sel.includes(name) ? sel.filter((n) => n !== name) : [name], st.tagSel);
+      sidebarAnchor = { list, name };
+    } else {
+      setFilterSel(st.colSel, sel.includes(name) ? sel.filter((n) => n !== name) : [name]);
+      sidebarAnchor = { list, name };
+    }
+    sidebarLead = `${list === "cols" ? "col" : "tag"}:${name}`;
+  };
+
+  // The lead row owns the gliding pill; extra multi-selections get a static one.
+  const colLead =
+    sidebarLead?.startsWith("col:") && colSel.includes(sidebarLead.slice(4))
+      ? sidebarLead.slice(4)
+      : colSel[0];
+  const tagLead =
+    sidebarLead?.startsWith("tag:") && tagSel.includes(sidebarLead.slice(4))
+      ? sidebarLead.slice(4)
+      : tagSel[0];
 
   const removeTagEverywhere = (tag: string) => {
     for (const [family, list] of Object.entries(tags)) {
       if (list.includes(tag)) {
         void setFamilyTags(family, list.filter((t) => t !== tag));
       }
+    }
+    const st = useFontStore.getState();
+    if (st.tagSel.includes(tag)) {
+      useFontStore.setState({ tagSel: st.tagSel.filter((t) => t !== tag) });
     }
   };
 
@@ -181,49 +256,70 @@ export function Sidebar() {
       <div className="sidebar-section">
         <div className="sidebar-heading">{t("side.browse")}</div>
         <NavRow
-          nav={{ kind: "library" }}
+          active={browse === "library"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("library")}
           icon={<Library size={15} strokeWidth={1.5} />}
           label={t("side.library")}
           count={familyCount}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "favorites" }}
+          active={browse === "favorites"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("favorites")}
           icon={<Star size={15} strokeWidth={1.5} />}
           label={t("side.favorites")}
           count={favorites.length}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "lastImported" }}
+          active={browse === "lastImported"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("lastImported")}
           icon={<History size={15} strokeWidth={1.5} />}
           label={t("side.lastImported")}
           count={lastImported.length}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "activated" }}
+          active={browse === "activated"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("activated")}
           icon={<Power size={15} strokeWidth={1.5} />}
           label={t("side.activated")}
           count={activatedCount}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "activatedSession" }}
+          active={browse === "activatedSession"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("activatedSession")}
           icon={<Clock size={15} strokeWidth={1.5} />}
           label={t("side.activatedUntilClose")}
           count={sessionCount}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "deactivated" }}
+          active={browse === "deactivated"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("deactivated")}
           icon={<PowerOff size={15} strokeWidth={1.5} />}
           label={t("side.deactivated")}
           count={deactivatedCount}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "system" }}
+          active={browse === "system"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("system")}
           icon={<Monitor size={15} strokeWidth={1.5} />}
           label={t("side.system")}
           count={systemCount}
@@ -266,7 +362,10 @@ export function Sidebar() {
           ) : (
             <NavRow
               key={name}
-              nav={{ kind: "collection", name }}
+              active={colSel.includes(name)}
+              lead={colLead === name}
+              pillId="nav-pill-collections"
+              onPick={(e) => pickFromList(e, "cols", name)}
               icon={<FolderOpen size={15} strokeWidth={1.5} />}
               label={name}
               count={(collections[name] ?? []).length}
@@ -310,7 +409,10 @@ export function Sidebar() {
           {[...tagCounts.entries()].map(([tag, count]) => (
             <NavRow
               key={tag}
-              nav={{ kind: "tag", tag }}
+              active={tagSel.includes(tag)}
+              lead={tagLead === tag}
+              pillId="nav-pill-tags"
+              onPick={(e) => pickFromList(e, "tags", tag)}
               icon={<Tag size={15} strokeWidth={1.5} />}
               label={tag}
               count={count}
@@ -333,14 +435,20 @@ export function Sidebar() {
 
       <div className="sidebar-footer">
         <NavRow
-          nav={{ kind: "trash" }}
+          active={area === "trash"}
+          lead
+          pillId="nav-pill-footer"
+          onPick={() => setArea("trash")}
           icon={<Trash2 size={15} strokeWidth={1.5} />}
           label={t("side.trash")}
           count={trash.length}
           index={i++}
         />
         <NavRow
-          nav={{ kind: "about" }}
+          active={area === "about"}
+          lead
+          pillId="nav-pill-footer"
+          onPick={() => setArea("about")}
           icon={<Info size={15} strokeWidth={1.5} />}
           label={t("side.about")}
           index={i++}

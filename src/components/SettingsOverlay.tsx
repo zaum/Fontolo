@@ -21,6 +21,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { PillToggle } from "../design/primitives/PillToggle";
+import { ACCENT_PRESETS, DEFAULT_ACCENT } from "../lib/accent";
 import { springSoft } from "../design/springs";
 import { ipc } from "../lib/ipc";
 import { useFontStore } from "../state/fontStore";
@@ -70,6 +71,8 @@ export function SettingsOverlay() {
   const setSoundPref = useFontStore((s) => s.setSoundPref);
   const themePref = useFontStore((s) => s.themePref);
   const setThemePref = useFontStore((s) => s.setThemePref);
+  const accent = useFontStore((s) => s.accent);
+  const setAccent = useFontStore((s) => s.setAccent);
   const scanning = useFontStore((s) => s.phase === "scanning");
   const scanProgress = useFontStore((s) => s.scanProgress);
   const trapRef = useFocusTrap<HTMLDivElement>(openState);
@@ -450,6 +453,49 @@ export function SettingsOverlay() {
                             </button>
                           ))}
                         </div>
+                      </div>
+                      <div className="settings-row settings-col">
+                        <div>
+                          <div className="settings-label">
+                            <Palette size={13} strokeWidth={1.5} /> {t("settings.accent")}
+                          </div>
+                          <div className="settings-sub">{t("settings.accentSub")}</div>
+                        </div>
+                        <div
+                          className="accent-swatches"
+                          role="radiogroup"
+                          aria-label={t("settings.accent")}
+                        >
+                          {ACCENT_PRESETS.map((hex) => (
+                            <button
+                              key={hex}
+                              role="radio"
+                              aria-checked={accent === hex}
+                              aria-label={hex}
+                              title={hex}
+                              className={`accent-swatch ${accent === hex ? "accent-swatch-on" : ""}`}
+                              style={{ background: hex }}
+                              onClick={() => setAccent(hex)}
+                            />
+                          ))}
+                          <label
+                            className="accent-custom"
+                            title={t("settings.accentCustom")}
+                          >
+                            <input
+                              type="color"
+                              value={accent}
+                              onChange={(e) => setAccent(e.target.value)}
+                              aria-label={t("settings.accentCustom")}
+                            />
+                          </label>
+                        </div>
+                        <button
+                          className="accent-reset"
+                          onClick={() => setAccent(DEFAULT_ACCENT)}
+                        >
+                          {t("settings.accentReset")}
+                        </button>
                       </div>
                       <div className="settings-row">
                         <div>
