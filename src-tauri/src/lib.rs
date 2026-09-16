@@ -11,9 +11,9 @@ mod store;
 mod watcher;
 
 use font_types::{FontFace, FontSource, TrashEntry};
+use serde::Serialize;
 use std::collections::HashMap;
 use store::Store;
-use serde::Serialize;
 use tauri::{Emitter, Manager, State};
 
 /// Faces from a completed scan, shared behind an `Arc` so handing them around
@@ -87,10 +87,7 @@ const SCAN_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12
 /// activations may have changed since the scan completed. The copy happens off
 /// the async runtime thread and without holding the cache lock, since a library
 /// can hold tens of thousands of faces.
-async fn stamp_active(
-    app: &tauri::AppHandle,
-    snap: FontSnapshot,
-) -> Result<FontSnapshot, String> {
+async fn stamp_active(app: &tauri::AppHandle, snap: FontSnapshot) -> Result<FontSnapshot, String> {
     let probe = activation::probe();
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<FontSnapshot, String> {
@@ -197,6 +194,10 @@ async fn run_scan(app: &tauri::AppHandle) -> Result<FontSnapshot, String> {
     };
     let gen = *scan_watch().borrow();
     let _ = scan_watch().send(gen + 1);
+    // Hand the parse cache to the next run on its own thread: whatever this
+    // scan parsed or pruned is worth keeping, and never worth delaying the
+    // result the UI is waiting for.
+    scanner::save_disk_cache();
     out
 }
 
@@ -263,6 +264,26 @@ async fn scan_fonts(app: tauri::AppHandle) -> Result<FontSnapshot, String> {
     scan_coalesced(&app).await
 }
 
+/// The library recovered from the previous run's on-disk cache. Lets the UI
+/// paint immediately on a cold start; a real scan follows and replaces it, so
+/// what arrives here may be missing files added since the cache was written.
+#[tauri::command]
+async fn warm_fonts(app: tauri::AppHandle) -> Result<Option<FontSnapshot>, String> {
+    let library_dir = {
+        let store: State<Store> = app.state();
+        let state = store.0.lock().map_err(|e| e.to_string())?;
+        state.active_library_dir().map(|s| s.to_owned())
+    };
+    let managed = scanner::effective_managed_dir(library_dir.as_deref());
+    let faces = tauri::async_runtime::spawn_blocking(move || scanner::warm_faces(&managed))
+        .await
+        .map_err(|e| e.to_string())?;
+    if faces.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(stamp_active(&app, FontSnapshot::new(faces)).await?))
+}
+
 /// The last completed scan result, if any. Lets the frontend show the
 /// library instantly at startup instead of staring at a skeleton.
 #[tauri::command]
@@ -309,10 +330,11 @@ async fn install_fonts(
     let library = scanner::effective_managed_dir(library_dir.as_deref());
     let known: std::collections::HashSet<String> = existing.into_iter().collect();
     let scope_app = app.clone();
-    let mut result =
-        tauri::async_runtime::spawn_blocking(move || installer::install(&app, paths, &known, mode, &library))
-            .await
-            .map_err(|e| e.to_string())?;
+    let mut result = tauri::async_runtime::spawn_blocking(move || {
+        installer::install(&app, paths, &known, mode, &library)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
     // New fonts start deactivated on every OS: run them through the regular
     // deactivate path so a later toggle can bring them back.
     // The Settings toggle can opt back into auto-activation for small batches.
@@ -347,7 +369,6 @@ async fn install_fonts(
 
 #[tauri::command]
 fn uninstall_font(store: State<Store>, path: String, family: String) -> Result<TrashEntry, String> {
-
     {
         let mut state = store.0.lock().map_err(|e| e.to_string())?;
         if state.deactivated.contains(&path) {
@@ -382,7 +403,8 @@ fn affinity_session_activate(
 ) -> Result<Vec<String>, String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
     let mut activated = Vec::with_capacity(paths.len());
-    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> =
+        std::collections::HashSet::with_capacity(paths.len());
     for path in &paths {
         if seen.insert(path.as_str()) {
             activated.push(path.clone());
@@ -517,7 +539,6 @@ fn get_charset(path: String, face_index: u32) -> Result<Vec<u32>, String> {
                 continue;
             }
             sub.codepoints(|cp| {
-
                 if cp > 0x20 && cp != 0x7f {
                     cps.push(cp);
                 }
@@ -532,7 +553,9 @@ fn get_charset(path: String, face_index: u32) -> Result<Vec<u32>, String> {
 
 #[tauri::command]
 fn export_font(src: String, dest: String) -> Result<(), String> {
-    std::fs::copy(&src, &dest).map(|_| ()).map_err(|e| e.to_string())
+    std::fs::copy(&src, &dest)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -556,7 +579,8 @@ fn set_fonts_active_session(store: State<Store>, paths: Vec<String>) -> Result<(
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
     // Best effort: keep every path that applied cleanly in the session list.
     let mut activated: Vec<String> = Vec::with_capacity(paths.len());
-    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> =
+        std::collections::HashSet::with_capacity(paths.len());
     for path in &paths {
         if !seen.insert(path.as_str()) {
             continue;
@@ -608,7 +632,10 @@ fn write_binary_file(path: String, data_base64: String) -> Result<(), String> {
     for (i, &c) in TABLE.iter().enumerate() {
         rev[c as usize] = i as u8;
     }
-    let clean: Vec<u8> = data_base64.bytes().filter(|&b| b != b'=' && !b.is_ascii_whitespace()).collect();
+    let clean: Vec<u8> = data_base64
+        .bytes()
+        .filter(|&b| b != b'=' && !b.is_ascii_whitespace())
+        .collect();
     let mut out: Vec<u8> = Vec::with_capacity(clean.len() * 3 / 4);
     for chunk in clean.chunks(4) {
         let mut n: u32 = 0;
@@ -736,7 +763,6 @@ fn allow_dir(app: &tauri::AppHandle, dir: &std::path::Path) {
 fn allow_previews(app: &tauri::AppHandle, extra: &[String]) {
     let scope = app.asset_protocol_scope();
     for (dir, _) in scanner::all_dirs(extra) {
-
         let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
         let _ = scope.allow_directory(&dir, true);
     }
@@ -747,7 +773,10 @@ fn apply_watch(app: &tauri::AppHandle, enabled: bool, extra: &[String]) -> Resul
     let mut slot = handle.0.lock().map_err(|e| e.to_string())?;
     *slot = None;
     if enabled {
-        let dirs = scanner::all_dirs(extra).into_iter().map(|(d, _)| d).collect();
+        let dirs = scanner::all_dirs(extra)
+            .into_iter()
+            .map(|(d, _)| d)
+            .collect();
         *slot = Some(watcher::start(app.clone(), dirs)?);
     }
     Ok(())
@@ -832,6 +861,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_fonts,
             peek_fonts,
+            warm_fonts,
             set_font_active,
             set_fonts_active,
             set_fonts_active_session,
@@ -874,6 +904,8 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 revert_session_activations(app);
+                // Last chance to persist anything the exit path changed.
+                scanner::save_disk_cache();
             }
         });
 }
@@ -932,6 +964,9 @@ mod tests {
         let copy = snap.clone();
 
         assert_eq!(std::sync::Arc::strong_count(&snap.0), 2);
-        assert_eq!(std::sync::Arc::as_ptr(&snap.0), std::sync::Arc::as_ptr(&copy.0));
+        assert_eq!(
+            std::sync::Arc::as_ptr(&snap.0),
+            std::sync::Arc::as_ptr(&copy.0)
+        );
     }
 }

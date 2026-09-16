@@ -1,5 +1,3 @@
-
-
 #![cfg(target_os = "windows")]
 
 use std::collections::HashSet;
@@ -117,7 +115,9 @@ pub struct UserSnapshot {
 
 impl UserSnapshot {
     pub fn load() -> Self {
-        Self { entries: user_entries() }
+        Self {
+            entries: user_entries(),
+        }
     }
 
     pub fn names_for(&self, path: &str) -> Vec<String> {
@@ -190,7 +190,9 @@ pub fn set_user_entry(name: &str, path: &str) -> Result<(), String> {
     if rc == ERROR_SUCCESS {
         Ok(())
     } else {
-        Err(format!("couldn't write the font registry entry (error {rc})"))
+        Err(format!(
+            "couldn't write the font registry entry (error {rc})"
+        ))
     }
 }
 
@@ -200,7 +202,9 @@ pub fn delete_user_entry(name: &str) -> Result<(), String> {
     if rc == ERROR_SUCCESS {
         Ok(())
     } else {
-        Err(format!("couldn't remove the font registry entry (error {rc})"))
+        Err(format!(
+            "couldn't remove the font registry entry (error {rc})"
+        ))
     }
 }
 
@@ -210,7 +214,11 @@ pub fn value_name_for_data(data: &[u8], path: &Path) -> String {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Font".to_string())
     };
-    let flavour = if data.starts_with(b"OTTO") { "OpenType" } else { "TrueType" };
+    let flavour = if data.starts_with(b"OTTO") {
+        "OpenType"
+    } else {
+        "TrueType"
+    };
     let count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
     let mut names: Vec<String> = Vec::new();
     for index in 0..count {
@@ -240,7 +248,11 @@ pub fn value_name_for_data(data: &[u8], path: &Path) -> String {
             names.push(full);
         }
     }
-    let base = if names.is_empty() { fallback() } else { names.join(" & ") };
+    let base = if names.is_empty() {
+        fallback()
+    } else {
+        names.join(" & ")
+    };
     format!("{base} ({flavour})")
 }
 

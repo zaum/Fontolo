@@ -1,5 +1,3 @@
-
-
 use rodio::buffer::SamplesBuffer;
 use rodio::OutputStream;
 use std::sync::mpsc::{channel, Sender};
@@ -48,7 +46,11 @@ fn samples_for(kind: &str, vol: f32) -> Vec<f32> {
         "restore" => seq(&[(329.6, 70, vol * 0.85), (493.9, 95, vol)]),
         "trash-empty" => tone(196.0, 160, vol * 0.9),
 
-        "install" => seq(&[(523.3, 65, vol), (659.3, 65, vol * 0.9), (784.0, 115, vol * 0.85)]),
+        "install" => seq(&[
+            (523.3, 65, vol),
+            (659.3, 65, vol * 0.9),
+            (784.0, 115, vol * 0.85),
+        ]),
         "success" => seq(&[(587.0, 90, vol), (880.0, 120, vol * 0.8)]),
         "error" => tone(220.0, 140, vol * 0.9),
         _ => Vec::new(),
@@ -60,7 +62,6 @@ fn sender() -> &'static Sender<(String, f32)> {
     TX.get_or_init(|| {
         let (tx, rx) = channel::<(String, f32)>();
         std::thread::spawn(move || {
-
             let stream = OutputStream::try_default().ok();
             for (kind, vol) in rx {
                 if let Some((_stream, handle)) = &stream {

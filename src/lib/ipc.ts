@@ -94,6 +94,9 @@ export const ipc = {
     invoke<string[]>("affinity_session_activate", { paths }),
   scanFonts: () => invoke<FontFace[]>("scan_fonts"),
   peekFonts: () => invoke<FontFace[] | null>("peek_fonts"),
+  // May be stale (files added since the cache was written are missing), so it
+  // is only a first paint: a real scan always follows and replaces it.
+  warmFonts: () => invoke<FontFace[] | null>("warm_fonts"),
   setFontActive: (path: string, active: boolean) =>
     invoke<void>("set_font_active", { path, active }),
   setFontsActive: (paths: string[], active: boolean) =>

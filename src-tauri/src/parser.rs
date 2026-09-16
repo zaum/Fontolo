@@ -82,9 +82,11 @@ fn script_coverage(face: &ttf_parser::Face) -> Vec<String> {
     SCRIPT_PROBES
         .iter()
         .filter(|(_, probes)| {
-            probes
-                .iter()
-                .all(|&cp| char::from_u32(cp).and_then(|c| face.glyph_index(c)).is_some())
+            probes.iter().all(|&cp| {
+                char::from_u32(cp)
+                    .and_then(|c| face.glyph_index(c))
+                    .is_some()
+            })
         })
         .map(|(name, _)| (*name).to_string())
         .collect()
@@ -242,7 +244,11 @@ pub fn read_font_bytes(path: &Path) -> Result<(Vec<u8>, u64), String> {
         cache.retain(|(p, _)| p != path);
         cache.push((
             path.to_path_buf(),
-            FileCacheEntry { len, mtime, data: data.clone() },
+            FileCacheEntry {
+                len,
+                mtime,
+                data: data.clone(),
+            },
         ));
         while cache.len() > FILE_CACHE_MAX {
             cache.remove(0);

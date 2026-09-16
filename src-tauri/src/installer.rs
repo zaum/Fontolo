@@ -102,7 +102,9 @@ fn expand_dropped(path: &Path, staging: &Path) -> Result<Vec<PathBuf>, String> {
         let mut out = Vec::new();
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-            let Some(name) = entry.enclosed_name() else { continue };
+            let Some(name) = entry.enclosed_name() else {
+                continue;
+            };
             if !parser::is_font_file(&name) {
                 continue;
             }
@@ -263,7 +265,6 @@ pub fn install(
 }
 
 pub fn uninstall(path: &str, family: &str) -> Result<TrashEntry, String> {
-
     #[cfg(target_os = "windows")]
     unregister_user_font(path);
 
@@ -359,7 +360,10 @@ pub fn restore(entry_id: &str) -> Result<RestoreOutcome, String> {
     if let Some(parent) = Path::new(&entry.original_path).parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    move_file(Path::new(&entry.trashed_path), Path::new(&entry.original_path))?;
+    move_file(
+        Path::new(&entry.trashed_path),
+        Path::new(&entry.original_path),
+    )?;
     remove_sidecar(&entry.trashed_path);
     refresh_system_font_cache();
     Ok(RestoreOutcome::Moved)

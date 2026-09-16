@@ -355,8 +355,12 @@ fn result_text(result: &serde_json::Value) -> String {
 }
 
 fn extract_json(text: &str) -> Result<serde_json::Value, String> {
-    let start = text.find('{').ok_or_else(|| "no JSON in the script result".to_string())?;
-    let end = text.rfind('}').ok_or_else(|| "no JSON in the script result".to_string())?;
+    let start = text
+        .find('{')
+        .ok_or_else(|| "no JSON in the script result".to_string())?;
+    let end = text
+        .rfind('}')
+        .ok_or_else(|| "no JSON in the script result".to_string())?;
     serde_json::from_str(&text[start..=end]).map_err(|e| e.to_string())
 }
 
@@ -385,7 +389,11 @@ async fn call_tool(
             timeout,
         )
         .await?;
-    if res.get("isError").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if res
+        .get("isError")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         return Err(result_text(&res));
     }
     Ok(res)
@@ -418,10 +426,18 @@ async fn run_doc_fonts_script(session: &mut Session) -> Result<Vec<AffinityDoc>,
     read_preamble(session, &tools).await?;
     let (tool_name, arg_name) = pick_script_tool(&tools)?;
     let mut args = serde_json::Map::new();
-    args.insert(arg_name, serde_json::Value::String(DOC_FONTS_SCRIPT.to_string()));
-    let res = call_tool(session, &tool_name, serde_json::Value::Object(args), SCRIPT_TIMEOUT)
-        .await
-        .map_err(|e| format!("Affinity script failed: {e}"))?;
+    args.insert(
+        arg_name,
+        serde_json::Value::String(DOC_FONTS_SCRIPT.to_string()),
+    );
+    let res = call_tool(
+        session,
+        &tool_name,
+        serde_json::Value::Object(args),
+        SCRIPT_TIMEOUT,
+    )
+    .await
+    .map_err(|e| format!("Affinity script failed: {e}"))?;
     let parsed = extract_json(&result_text(&res))?;
     let resp: DocFontsResponse =
         serde_json::from_value(parsed).map_err(|e| format!("unexpected script result: {e}"))?;
@@ -488,7 +504,10 @@ pub fn note_activated(paths: Vec<String>) {
 }
 
 fn session_empty() -> bool {
-    AFFINITY_SESSION.lock().map(|s| s.is_empty()).unwrap_or(true)
+    AFFINITY_SESSION
+        .lock()
+        .map(|s| s.is_empty())
+        .unwrap_or(true)
 }
 
 /// Deactivate everything the Affinity watcher turned on. Returns the count.
@@ -504,7 +523,8 @@ pub fn revert_session(state: &mut crate::store::AppState) -> usize {
     if crate::activation::sync_many(state, &paths, false).is_err() {
         return 0;
     }
-    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> =
+        std::collections::HashSet::with_capacity(paths.len());
     let mut n = 0;
     for p in &paths {
         if seen.insert(p.as_str()) {

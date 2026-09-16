@@ -6,7 +6,10 @@ use tauri::Emitter;
 
 pub struct WatchHandle(pub Mutex<Option<notify::RecommendedWatcher>>);
 
-pub fn start(app: tauri::AppHandle, dirs: Vec<PathBuf>) -> Result<notify::RecommendedWatcher, String> {
+pub fn start(
+    app: tauri::AppHandle,
+    dirs: Vec<PathBuf>,
+) -> Result<notify::RecommendedWatcher, String> {
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         let Ok(event) = res else { return };
 
@@ -19,7 +22,6 @@ pub fn start(app: tauri::AppHandle, dirs: Vec<PathBuf>) -> Result<notify::Recomm
 
     for dir in dirs {
         if dir.is_dir() {
-
             let _ = watcher.watch(&dir, RecursiveMode::Recursive);
         }
     }

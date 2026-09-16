@@ -1,5 +1,3 @@
-
-
 #![cfg_attr(
     not(any(target_os = "windows", target_os = "macos")),
     allow(dead_code, unused_imports)
@@ -174,8 +172,10 @@ pub fn apply(target: Target, postscript: &str, label: &str) -> Result<String, St
         Target::Illustrator => "Illustrator.Application",
     };
 
-    let script_path = std::env::temp_dir().join(format!("zfontmanager-apply-{}.jsx", std::process::id()));
-    std::fs::write(&script_path, script_for(target, postscript, label)).map_err(|e| e.to_string())?;
+    let script_path =
+        std::env::temp_dir().join(format!("zfontmanager-apply-{}.jsx", std::process::id()));
+    std::fs::write(&script_path, script_for(target, postscript, label))
+        .map_err(|e| e.to_string())?;
     let path_literal = script_path.to_string_lossy().replace('\'', "''");
 
     let ps = format!(
@@ -191,10 +191,21 @@ pub fn apply(target: Target, postscript: &str, label: &str) -> Result<String, St
 
     let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
     let exe = format!("{system_root}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
-    let exe = if std::path::Path::new(&exe).exists() { exe } else { "powershell".to_string() };
+    let exe = if std::path::Path::new(&exe).exists() {
+        exe
+    } else {
+        "powershell".to_string()
+    };
 
     let out = Command::new(exe)
-        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &encoded])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            &encoded,
+        ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string());
@@ -207,12 +218,24 @@ fn base64_encode(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
-        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
         let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
         out.push(TABLE[(n >> 18) as usize & 63] as char);
         out.push(TABLE[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { TABLE[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { TABLE[n as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            TABLE[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[n as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -281,4 +304,3 @@ mod tests {
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
 }
-

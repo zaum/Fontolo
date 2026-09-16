@@ -7,7 +7,6 @@ use std::sync::Mutex;
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppState {
-
     pub deactivated: HashSet<String>,
 
     pub tags: HashMap<String, Vec<String>>,

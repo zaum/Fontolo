@@ -4,18 +4,15 @@ use crate::store::AppState;
 pub fn can_deactivate(source: FontSource) -> bool {
     #[cfg(target_os = "linux")]
     {
-
         let _ = source;
         true
     }
     #[cfg(target_os = "macos")]
     {
-
         source != FontSource::System
     }
     #[cfg(target_os = "windows")]
     {
-
         source != FontSource::System
     }
 }
@@ -33,7 +30,8 @@ pub fn sync(state: &mut AppState, path: &str, active: bool) -> Result<(), String
 /// the same file once per face).
 pub fn sync_many(state: &mut AppState, paths: &[String], active: bool) -> Result<(), String> {
     let mut ordered: Vec<&str> = Vec::with_capacity(paths.len());
-    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::with_capacity(paths.len());
+    let mut seen: std::collections::HashSet<&str> =
+        std::collections::HashSet::with_capacity(paths.len());
     for p in paths {
         if seen.insert(p.as_str()) {
             ordered.push(p.as_str());
@@ -141,16 +139,13 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
     }
 
     if active {
-
         let parked = state
             .parked
             .remove(path)
             .ok_or_else(|| format!("no parked copy recorded for {path}"))?;
         move_file(Path::new(&parked), Path::new(path))?;
     } else {
-        let file_name = Path::new(path)
-            .file_name()
-            .ok_or("invalid font path")?;
+        let file_name = Path::new(path).file_name().ok_or("invalid font path")?;
         let mut dest: PathBuf = parked_dir.join(file_name);
 
         let mut n = 1;
@@ -181,11 +176,7 @@ fn apply(state: &mut AppState, path: &str, active: bool) -> Result<(), String> {
 /// Batch entry for [`sync_many`]: one registry snapshot + one broadcast for
 /// the whole batch instead of per-font enumeration and notification.
 #[cfg(target_os = "windows")]
-pub fn apply_batch(
-    state: &mut AppState,
-    paths: &[&str],
-    active: bool,
-) -> Result<(), String> {
+pub fn apply_batch(state: &mut AppState, paths: &[&str], active: bool) -> Result<(), String> {
     use crate::registry;
 
     let snap = registry::UserSnapshot::load();
@@ -257,13 +248,11 @@ fn apply_one(
 
 #[cfg(target_os = "linux")]
 pub fn reconcile(state: &mut AppState) {
-
     let _ = apply(state, "", true);
 }
 
 #[cfg(target_os = "windows")]
 pub fn reconcile(state: &mut AppState) {
-
     let managed = crate::scanner::effective_managed_dir(state.active_library_dir());
     std::thread::spawn(move || {
         crate::registry::load_registered_outside(&managed);
@@ -330,7 +319,10 @@ mod tests {
 
         sync(&mut state, font, true).unwrap();
         assert!(!state.deactivated.contains(font));
-        assert!(!fragment.exists(), "fragment should be removed when nothing is deactivated");
+        assert!(
+            !fragment.exists(),
+            "fragment should be removed when nothing is deactivated"
+        );
 
         assert!(is_active_path(&state, font));
         let _ = std::fs::remove_dir_all(&tmp);
