@@ -129,13 +129,14 @@ function MainContent() {
   const variableOnly = useFontStore((s) => s.variableOnly);
   const sort = useFontStore((s) => s.sort);
 
+  const foundrySel = useFontStore((s) => s.foundrySel);
   const families = useMemo(
     () =>
       selectVisibleFamilies({
         fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search,
-        classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, sort,
+        classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, selFoundrys: foundrySel, sort,
       }),
-    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, sort],
+    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort],
   );
 
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);

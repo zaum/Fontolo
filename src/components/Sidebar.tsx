@@ -1,15 +1,15 @@
-import { motion } from "motion/react";
-import { Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, Star, Tag, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, Star, Tag, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
-import { allTags, familiesFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
+import { allFoundryCounts, allTags, familiesFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
 
 // Anchor for shift+click range selection, and the key of the last picked
 // row — it owns the gliding pill inside a multi-selected section.
-let sidebarAnchor: { list: "cols" | "tags"; name: string } | null = null;
+let sidebarAnchor: { list: "cols" | "tags" | "foundrys"; name: string } | null = null;
 let sidebarLead: string | null = null;
 
 function NavRow({
@@ -142,6 +142,10 @@ export function Sidebar() {
 
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(true);
+  const [collectionsOpen, setCollectionsOpen] = useState(true);
+  const [tagsOpen, setTagsOpen] = useState(true);
+  const [foundryOpen, setFoundryOpen] = useState(true);
 
   useEffect(() => {
     if (pendingCollectionFor) setCreating(true);
@@ -161,10 +165,12 @@ export function Sidebar() {
     (f) => f.faces.length > 0 && f.faces.every((face) => face.source === "system"),
   ).length;
   const tagCounts = allTags(tags);
+  const foundryCounts = allFoundryCounts(fonts, tags);
   const collectionNames = Object.keys(collections).sort((a, b) => a.localeCompare(b));
   const browse = useFontStore((s) => s.browseSel);
   const colSel = useFontStore((s) => s.colSel);
   const tagSel = useFontStore((s) => s.tagSel);
+  const foundrySel = useFontStore((s) => s.foundrySel);
   const area = useFontStore((s) => s.area);
   const setBrowse = useFontStore((s) => s.setBrowse);
   const setFilterSel = useFontStore((s) => s.setFilterSel);
@@ -173,7 +179,7 @@ export function Sidebar() {
   const pickBrowse = (b: BrowseKind) => {
     if (b === "library") {
       // Library resets every block.
-      setFilterSel([], []);
+      setFilterSel([], [], []);
       setBrowse("library");
     } else {
       setBrowse(b);
@@ -184,12 +190,18 @@ export function Sidebar() {
 
   const pickFromList = (
     e: React.MouseEvent,
-    list: "cols" | "tags",
+    list: "cols" | "tags" | "foundrys",
     name: string,
   ) => {
     const st = useFontStore.getState();
-    const names = list === "cols" ? collectionNames : [...tagCounts.keys()];
-    const sel = list === "cols" ? st.colSel : st.tagSel;
+    const names =
+      list === "cols"
+        ? collectionNames
+        : list === "tags"
+          ? [...tagCounts.keys()]
+          : [...foundryCounts.keys()];
+    const sel =
+      list === "cols" ? st.colSel : list === "tags" ? st.tagSel : st.foundrySel;
     if (e.shiftKey) {
       if (sidebarAnchor && sidebarAnchor.list === list && names.includes(sidebarAnchor.name)) {
         const a = names.indexOf(sidebarAnchor.name);
@@ -197,29 +209,38 @@ export function Sidebar() {
         const range = names.slice(Math.min(a, b), Math.max(a, b) + 1);
         const merged = [...sel];
         for (const r of range) if (!merged.includes(r)) merged.push(r);
-        if (list === "cols") setFilterSel(merged, st.tagSel);
-        else setFilterSel(st.colSel, merged);
+        if (list === "cols") setFilterSel(merged, st.tagSel, st.foundrySel);
+        else if (list === "tags") setFilterSel(st.colSel, merged, st.foundrySel);
+        else setFilterSel(st.colSel, st.tagSel, merged);
       } else if (list === "cols") {
-        setFilterSel([name], st.tagSel);
+        setFilterSel([name], st.tagSel, st.foundrySel);
+        sidebarAnchor = { list, name };
+      } else if (list === "tags") {
+        setFilterSel(st.colSel, [name], st.foundrySel);
         sidebarAnchor = { list, name };
       } else {
-        setFilterSel(st.colSel, [name]);
+        setFilterSel(st.colSel, st.tagSel, [name]);
         sidebarAnchor = { list, name };
       }
     } else if (e.ctrlKey || e.metaKey) {
       const next = sel.includes(name) ? sel.filter((n) => n !== name) : [...sel, name];
-      if (list === "cols") setFilterSel(next, st.tagSel);
-      else setFilterSel(st.colSel, next);
+      if (list === "cols") setFilterSel(next, st.tagSel, st.foundrySel);
+      else if (list === "tags") setFilterSel(st.colSel, next, st.foundrySel);
+      else setFilterSel(st.colSel, st.tagSel, next);
       sidebarAnchor = { list, name };
     } else if (list === "cols") {
       // Plain click on an already selected row removes it; otherwise isolates it.
-      setFilterSel(sel.includes(name) ? sel.filter((n) => n !== name) : [name], st.tagSel);
+      setFilterSel(sel.includes(name) ? sel.filter((n) => n !== name) : [name], st.tagSel, st.foundrySel);
+      sidebarAnchor = { list, name };
+    } else if (list === "tags") {
+      setFilterSel(st.colSel, sel.includes(name) ? sel.filter((n) => n !== name) : [name], st.foundrySel);
       sidebarAnchor = { list, name };
     } else {
-      setFilterSel(st.colSel, sel.includes(name) ? sel.filter((n) => n !== name) : [name]);
+      setFilterSel(st.colSel, st.tagSel, sel.includes(name) ? sel.filter((n) => n !== name) : [name]);
       sidebarAnchor = { list, name };
     }
-    sidebarLead = `${list === "cols" ? "col" : "tag"}:${name}`;
+    const prefix = list === "cols" ? "col" : list === "tags" ? "tag" : "foundry";
+    sidebarLead = `${prefix}:${name}`;
   };
 
   // The lead row owns the gliding pill; extra multi-selections get a static one.
@@ -231,6 +252,10 @@ export function Sidebar() {
     sidebarLead?.startsWith("tag:") && tagSel.includes(sidebarLead.slice(4))
       ? sidebarLead.slice(4)
       : tagSel[0];
+  const foundryLead =
+    sidebarLead?.startsWith("foundry:") && foundrySel.includes(sidebarLead.slice(8))
+      ? sidebarLead.slice(8)
+      : foundrySel[0];
 
   const removeTagEverywhere = (tag: string) => {
     for (const [family, list] of Object.entries(tags)) {
@@ -254,7 +279,19 @@ export function Sidebar() {
     >
       <div className="sidebar-scroll">
       <div className="sidebar-section">
-        <div className="sidebar-heading">{t("side.browse")}</div>
+        <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setBrowseOpen((o) => !o)} aria-expanded={browseOpen}>
+          <span className="sidebar-heading-chevron">{browseOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+          <span>{t("side.browse")}</span>
+        </button>
+        <AnimatePresence initial={false}>
+        {browseOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springSoft}
+            style={{ overflow: "hidden" }}
+          >
         <NavRow
           active={browse === "library"}
           lead
@@ -325,11 +362,17 @@ export function Sidebar() {
           count={systemCount}
           index={i++}
         />
+          </motion.div>
+        )}
+        </AnimatePresence>
       </div>
 
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">
-          <span>{t("side.collections")}</span>
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setCollectionsOpen((o) => !o)} aria-expanded={collectionsOpen} style={{ flex: 1 }}>
+            <span className="sidebar-heading-chevron">{collectionsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+            <span>{t("side.collections")}</span>
+          </button>
           <motion.button
             className="sidebar-add"
             aria-label={t("side.newCollection")}
@@ -339,6 +382,15 @@ export function Sidebar() {
             <Plus size={13} strokeWidth={2} />
           </motion.button>
         </div>
+        <AnimatePresence initial={false}>
+        {collectionsOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springSoft}
+            style={{ overflow: "hidden" }}
+          >
         {creating && (
           <NewCollectionInput
             onDone={() => {
@@ -400,11 +452,26 @@ export function Sidebar() {
             {t("side.firstCollection")}
           </button>
         )}
+          </motion.div>
+        )}
+        </AnimatePresence>
       </div>
 
       {tagCounts.size > 0 && (
         <div className="sidebar-section">
-          <div className="sidebar-heading">{t("side.tags")}</div>
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setTagsOpen((o) => !o)} aria-expanded={tagsOpen}>
+            <span className="sidebar-heading-chevron">{tagsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+            <span>{t("side.tags")}</span>
+          </button>
+          <AnimatePresence initial={false}>
+          {tagsOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={springSoft}
+              style={{ overflow: "hidden" }}
+            >
           <div className="sidebar-list">
           {[...tagCounts.entries()].map(([tag, count]) => (
             <NavRow
@@ -429,6 +496,45 @@ export function Sidebar() {
             />
           ))}
           </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {foundryCounts.size > 0 && (
+        <div className="sidebar-section">
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setFoundryOpen((o) => !o)} aria-expanded={foundryOpen}>
+            <span className="sidebar-heading-chevron">{foundryOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
+            <span>{t("side.foundry")}</span>
+          </button>
+          <AnimatePresence initial={false}>
+          {foundryOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={springSoft}
+              style={{ overflow: "hidden" }}
+            >
+          <div className="sidebar-list sidebar-list-scrollable">
+          {[...foundryCounts.entries()].map(([foundry, count]) => (
+            <NavRow
+              key={foundry}
+              active={foundrySel.includes(foundry)}
+              lead={foundryLead === foundry}
+              pillId="nav-pill-foundry"
+              onPick={(e) => pickFromList(e, "foundrys", foundry)}
+              icon={<Building2 size={15} strokeWidth={1.5} />}
+              label={foundry}
+              count={count}
+              index={i++}
+            />
+          ))}
+          </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
         </div>
       )}
       </div>

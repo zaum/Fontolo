@@ -46,6 +46,7 @@ export type Nav =
   | { kind: "about" }
   | { kind: "tag"; tag: string }
   | { kind: "collection"; name: string }
+  | { kind: "foundry"; foundry: string }
   | { kind: "favorites" }
   | { kind: "activated" }
   | { kind: "activatedSession" }
@@ -136,6 +137,7 @@ interface FontStore {
   browseSel: BrowseKind;
   colSel: string[];
   tagSel: string[];
+  foundrySel: string[];
   area: AreaKind;
   selectedFamily: string | null;
 
@@ -202,7 +204,7 @@ interface FontStore {
   importLibraryData: (src: string) => Promise<void>;
   setNav: (n: Nav) => void;
   setBrowse: (b: BrowseKind) => void;
-  setFilterSel: (cols: string[], tags: string[]) => void;
+  setFilterSel: (cols: string[], tags: string[], foundrys?: string[]) => void;
   setArea: (a: AreaKind) => void;
   select: (family: string | null) => void;
 }
@@ -276,6 +278,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   browseSel: "library",
   colSel: [],
   tagSel: [],
+  foundrySel: [],
   area: "main",
   selectedFamily: null,
   pendingCollectionFor: null,
@@ -1197,6 +1200,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         browseSel: "library",
         colSel: [],
         tagSel: [nav.tag],
+        foundrySel: [],
         selectedFamily: null,
         selection: [],
       });
@@ -1208,6 +1212,19 @@ export const useFontStore = create<FontStore>((set, get) => ({
         browseSel: "library",
         colSel: [nav.name],
         tagSel: [],
+        foundrySel: [],
+        selectedFamily: null,
+        selection: [],
+      });
+      return;
+    }
+    if (nav.kind === "foundry") {
+      set({
+        area: "main",
+        browseSel: "library",
+        colSel: [],
+        tagSel: [],
+        foundrySel: [nav.foundry],
         selectedFamily: null,
         selection: [],
       });
@@ -1218,14 +1235,22 @@ export const useFontStore = create<FontStore>((set, get) => ({
       browseSel: nav.kind,
       colSel: [],
       tagSel: [],
+      foundrySel: [],
       selectedFamily: null,
       selection: [],
     });
   },
   setBrowse: (browseSel) =>
-    set({ area: "main", browseSel, selectedFamily: null, selection: [] }),
-  setFilterSel: (colSel, tagSel) =>
-    set({ area: "main", colSel, tagSel, selectedFamily: null, selection: [] }),
+    set({ area: "main", browseSel, foundrySel: [], selectedFamily: null, selection: [] }),
+  setFilterSel: (colSel, tagSel, foundrySel) =>
+    set((s) => ({
+      area: "main",
+      colSel,
+      tagSel,
+      foundrySel: foundrySel ?? s.foundrySel,
+      selectedFamily: null,
+      selection: [],
+    })),
   setArea: (area) => set({ area, selectedFamily: null, selection: [] }),
   select: (selectedFamily) =>
     set({ selectedFamily, selection: selectedFamily ? [selectedFamily] : [] }),
@@ -1290,6 +1315,7 @@ export function selectVisibleFamilies(s: {
   browse: BrowseKind;
   selCols: string[];
   selTags: string[];
+  selFoundrys?: string[];
   sort: SortMode;
 }): Family[] {
   const families = [...familiesFor(s.fonts, s.tags).values()];
@@ -1323,10 +1349,12 @@ export function selectVisibleFamilies(s: {
       f.faces.length > 0 && f.faces.every((face) => face.source === "system");
   }
   let groupPred: ((f: Family) => boolean) | null = null;
-  if (s.selCols.length > 0 || s.selTags.length > 0) {
+  if (s.selCols.length > 0 || s.selTags.length > 0 || (s.selFoundrys?.length ?? 0) > 0) {
     const members = new Set(s.selCols.flatMap((c) => s.collections[c] ?? []));
     groupPred = (f) =>
-      members.has(f.name) || s.selTags.some((tg) => f.tags.includes(tg));
+      members.has(f.name) ||
+      s.selTags.some((tg) => f.tags.includes(tg)) ||
+      (s.selFoundrys?.includes(f.foundry ?? "") ?? false);
   }
   if (browsePred || groupPred) {
     out = out.filter(
@@ -1433,5 +1461,22 @@ export function computeConflicts(fonts: FontFace[]): Map<string, FontConflict[]>
     }
   }
   return out;
+}
+
+export function allFoundrys(fonts: FontFace[]): string[] {
+  const set = new Set<string>();
+  for (const f of fonts) {
+    if (f.foundry) set.add(f.foundry);
+  }
+  return [...set].sort();
+}
+
+export function allFoundryCounts(fonts: FontFace[], tags: Record<string, string[]>): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const fam of familiesFor(fonts, tags).values()) {
+    if (!fam.foundry) continue;
+    m.set(fam.foundry, (m.get(fam.foundry) ?? 0) + 1);
+  }
+  return new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }
 
