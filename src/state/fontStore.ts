@@ -26,7 +26,7 @@ import {
   type LocalePref,
 } from "../lib/i18n";
 
-export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96] as const;
+export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96, 128] as const;
 
 // Width of the left filter column (Sidebar). The current 248px is the
 // minimum — the column can only grow from there.
@@ -381,7 +381,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
         sampleCustoms: Array.isArray(prefs.sampleCustoms)
           ? (prefs.sampleCustoms as unknown[]).filter((n): n is string => typeof n === "string").slice(0, 50)
           : [],
-        sizeIndex: typeof prefs.sizeIndex === "number" ? prefs.sizeIndex : get().sizeIndex,
+        sizeIndex:
+          typeof prefs.sizeIndex === "number"
+            ? Math.min(SIZES.length - 1, Math.max(0, Math.floor(prefs.sizeIndex)))
+            : get().sizeIndex,
         viewMode: (["grid", "list", "waterfall"] as const).includes(
           prefs.viewMode as ViewMode,
         )

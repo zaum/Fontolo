@@ -458,25 +458,49 @@
 .topbar-size input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--accent-a);
   border: none;
-  transition: transform var(--t-micro) ease;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--t-quick) ease, transform var(--t-micro) ease;
+}
+.topbar-size:hover input[type="range"]::-webkit-slider-thumb,
+.topbar-size input[type="range"]:focus-visible::-webkit-slider-thumb,
+.topbar-size input[type="range"]:active::-webkit-slider-thumb {
+  opacity: 1;
+  transform: scale(1);
 }
 .topbar-size input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+  transform: scale(1.2);
 }
 .topbar-size input[type="range"]::-webkit-slider-thumb:active {
   transform: scale(1.05);
+}
+.topbar-size input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-a);
+  border: none;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--t-quick) ease, transform var(--t-micro) ease;
+}
+.topbar-size:hover input[type="range"]::-moz-range-thumb,
+.topbar-size input[type="range"]:focus-visible::-moz-range-thumb,
+.topbar-size input[type="range"]:active::-moz-range-thumb {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .size-value {
   font-size: var(--fs-11);
   font-weight: 400;
   color: var(--text-secondary);
-  min-width: 32px;
+  min-width: 38px;
   text-align: right;
 }
 .size-value::after {
