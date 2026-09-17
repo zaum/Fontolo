@@ -1,8 +1,44 @@
 # ZFontManager — Changelog
 
-* **Total commits:** 42
-* **Date range:** 2026-09-14 – 2026-09-16
+* **Total commits:** 45
+* **Date range:** 2026-09-14 – 2026-09-17
 * **Environment / Context:** Personal fork & feature integration
+
+---
+
+### 2026-09-17 · 🎨 UI/UX · Sample-Text Toolbar Becomes a T-Button Popup
+
+* Replaced the wide toolbar preview-text field with a single T-icon button that opens a small popup under the icon, with a caret pointing back at the button.
+* Added a "Font name as preview" option first in the list (italic label, dashed border, no accent color) that renders each family in its own name across cards, detail panel, waterfall, compare and specimen export.
+* Added a presets section with uppercase alphabet, lowercase alphabet, digits and the localized pangram sentence.
+* Added a custom section where each saved text is edited inline, deleted with the trailing x button and selected by focusing its row.
+* Added an empty add-row with a leading + button that saves the typed text as a new custom sample on click or Enter.
+* Added a small footer link to the Wikipedia pangram page for pangrams in many more languages.
+* Clicking outside the popup or pressing Escape closes it without changing the preview.
+* Persisted the font-name mode and the custom list alongside the existing preview-text preference.
+
+`Direct Commit` · `648bf82`
+
+---
+
+### 2026-09-17 · 🐛 Fixes · Smooth Sidebar Drag-Resize
+
+* Sidebar drag-resize no longer re-renders on every mouse move: the width is applied directly to the DOM node during the drag and committed to the store once on release.
+* Inner transitions and keyframe animations are frozen while dragging, so the accent selection pill no longer re-animates mid-drag.
+* Resize grip targets its own parent element instead of a forwarded ref, so the drag feedback is always visible.
+
+`Direct Commit` · `e9a981b`
+
+---
+
+### 2026-09-17 · 🚀 Features · Resizable Filter Sidebar
+
+* Left filter sidebar is resizable by dragging its right edge (248 px minimum, 520 px maximum).
+* Sidebar width is remembered across restarts via persisted prefs.
+* Double-click on the resize edge resets to the default width.
+* Resize label translated for all 9 languages.
+
+`Direct Commit` · `eae4b72`
 
 ---
 
