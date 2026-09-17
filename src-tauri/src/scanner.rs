@@ -238,13 +238,48 @@ pub fn save_disk_cache() {
                 return;
             }
         }
-        // Write beside the target and rename: an interrupted write can then
-        // never leave a half-written cache behind.
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, &bytes).is_ok() {
-            let _ = std::fs::rename(&tmp, &path);
-        }
+        let _ = write_cache_file(&path, &bytes);
     });
+}
+
+/// Atomically replace `path` with `bytes`.
+///
+/// The temporary file gets a unique name per write and is created with
+/// `create_new`, so two concurrent savers can never claim each other's temp
+/// file (a fixed name would let the second rename steal the first writer's
+/// unfinished snapshot).
+fn write_cache_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+
+    let mut last_err = None;
+    for _ in 0..3 {
+        let tmp = path.with_extension(format!(
+            "json.tmp.{}.{}",
+            std::process::id(),
+            WRITES.fetch_add(1, Ordering::Relaxed)
+        ));
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp);
+        match file {
+            Ok(_) => {
+                let written = std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+                if written.is_ok() {
+                    return Ok(());
+                }
+                let _ = std::fs::remove_file(&tmp);
+                return written;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                last_err = Some(e);
+                continue; // impossibly unlikely; retry with the next counter value
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| std::io::Error::other("temporary file collision")))
 }
 
 /// Default folder moved imports are stored in (per-user fonts on Windows).
@@ -420,6 +455,39 @@ fn prune_cache(seen: &std::collections::HashSet<PathBuf>) {
 mod tests {
     use super::*;
     use crate::font_types::{Classification, FontFormat};
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let root = std::env::temp_dir();
+            loop {
+                let path = root.join(format!("zfm-cache-test-{}-{}", std::process::id(), next_tick()));
+                match std::fs::create_dir(&path) {
+                    Ok(()) => return Self(path),
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(e) => panic!("create test directory: {e}"),
+                }
+            }
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn cache_save_preserves_another_writers_temporary_file() {
+        let dir = TestDirectory::new();
+        let path = dir.0.join("scan-cache.json");
+        let occupied = path.with_extension("json.tmp");
+        std::fs::write(&occupied, b"another writer's unfinished snapshot").unwrap();
+        write_cache_file(&path, b"our complete snapshot").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"our complete snapshot");
+        assert_eq!(std::fs::read(&occupied).unwrap(), b"another writer's unfinished snapshot");
+    }
 
     fn face(id: &str) -> FontFace {
         FontFace {
