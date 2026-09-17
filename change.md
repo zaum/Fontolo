@@ -6,6 +6,16 @@
 
 ---
 
+### 2026-09-17 · 🎨 UI/UX · Preview Size Slider Polish & Larger Maximum
+
+* Shrunk the preview size slider thumb from 15 px to 12 px for a lighter toolbar feel.
+* The thumb now stays hidden until needed and fades in on hover, focus or while dragging.
+* Raised the maximum preview size from 96 px to 128 px, with stored size preferences clamped to the valid range.
+
+`Direct Commit` · `ae56778`
+
+---
+
 ### 2026-09-17 · 🎨 UI/UX · Sample-Text Toolbar Becomes a T-Button Popup
 
 * Replaced the wide toolbar preview-text field with a single T-icon button that opens a small popup under the icon, with a caret pointing back at the button.
