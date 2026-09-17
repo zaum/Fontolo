@@ -19,6 +19,7 @@ import {
   Rows3,
   Search,
   Settings,
+  Sparkles,
   Star,
   SunMoon,
   Trash2,
@@ -101,6 +102,12 @@ export function CommandPalette() {
         label: t("palette.goSession"),
         icon: <Clock size={14} strokeWidth={1.5} />,
         run: () => s.setNav({ kind: "activatedSession" }),
+      },
+      {
+        id: "nav-affinity",
+        label: t("palette.goAffinity"),
+        icon: <Sparkles size={14} strokeWidth={1.5} />,
+        run: () => s.setNav({ kind: "affinity" }),
       },
       {
         id: "nav-deactivated",

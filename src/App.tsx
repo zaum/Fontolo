@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { Clock, FolderOpen, History, LoaderCircle, Monitor, Power, PowerOff, SearchX, Star, Tag as TagIcon, Type } from "lucide-react";
+import { Clock, FolderOpen, History, LoaderCircle, Monitor, Power, PowerOff, SearchX, Sparkles, Star, Tag as TagIcon, Type } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { DetailPanel } from "./components/DetailPanel";
 import { Titlebar } from "./components/Titlebar";
@@ -121,6 +121,10 @@ function EmptyLibrary({
     icon = <Clock size={26} strokeWidth={1.5} />;
     title = t("empty.session.title");
     hint = t("empty.session.body");
+  } else if (browse === "affinity") {
+    icon = <Sparkles size={26} strokeWidth={1.5} />;
+    title = t("empty.affinity.title");
+    hint = t("empty.affinity.body");
   } else if (browse === "deactivated") {
     icon = <PowerOff size={26} strokeWidth={1.5} />;
     title = t("empty.deactivated.title");
@@ -156,6 +160,7 @@ function MainContent() {
   const collections = useFontStore((s) => s.collections);
   const favorites = useFontStore((s) => s.favorites);
   const sessionActivated = useFontStore((s) => s.sessionActivated);
+  const affinityActivated = useFontStore((s) => s.affinityActivated);
   const lastImported = useFontStore((s) => s.lastImported);
   const notes = useFontStore((s) => s.notes);
   const search = useFontStore((s) => s.search);
@@ -168,10 +173,10 @@ function MainContent() {
   const families = useMemo(
     () =>
       selectVisibleFamilies({
-        fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search,
+        fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search,
         classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, selFoundrys: foundrySel, sort,
       }),
-    [fonts, tags, collections, favorites, sessionActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort],
+    [fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort],
   );
 
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);

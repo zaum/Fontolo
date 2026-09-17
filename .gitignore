@@ -1,6 +1,8 @@
 # Local / editor notes
 todo.txt
 AGENTS.md
+changelog-temp.md
+changelog-commit-*.md
 
 # Build outputs and dependencies
 node_modules/

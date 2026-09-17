@@ -78,6 +78,7 @@ export type Nav =
   | { kind: "favorites" }
   | { kind: "activated" }
   | { kind: "activatedSession" }
+  | { kind: "affinity" }
   | { kind: "deactivated" }
   | { kind: "system" }
   | { kind: "lastImported" };
@@ -92,6 +93,7 @@ export type BrowseKind =
   | "lastImported"
   | "activated"
   | "activatedSession"
+  | "affinity"
   | "deactivated"
   | "system";
 
@@ -119,6 +121,7 @@ interface FontStore {
   collections: Record<string, string[]>;
   favorites: string[];
   sessionActivated: string[];
+  affinityActivated: string[];
   lastImported: string[];
   notes: Record<string, string>;
   trash: TrashEntry[];
@@ -290,6 +293,9 @@ function applyLibrary(
   const alive = new Set(data.fonts.filter((f) => f.active).map((f) => f.family));
   const kept = get().sessionActivated.filter((n) => alive.has(n));
   if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
+  const keptAffinity = get().affinityActivated.filter((n) => alive.has(n));
+  if (keptAffinity.length !== get().affinityActivated.length)
+    set({ affinityActivated: keptAffinity });
 }
 
 export const useFontStore = create<FontStore>((set, get) => ({
@@ -300,6 +306,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   collections: {},
   favorites: [],
   sessionActivated: [],
+  affinityActivated: [],
   lastImported: [],
   notes: {},
   trash: [],
@@ -429,6 +436,13 @@ export const useFontStore = create<FontStore>((set, get) => ({
           try {
             const activated = await ipc.affinitySessionActivate(paths);
             if (activated.length === 0) return;
+            const byPath = new Map(get().fonts.map((f) => [f.path, f.family]));
+            const families = [...new Set(activated.map((p) => byPath.get(p)).filter((n): n is string => Boolean(n)))];
+            if (families.length > 0) {
+              set({
+                affinityActivated: [...new Set([...get().affinityActivated, ...families])],
+              });
+            }
             const titles = [...new Set(evt.docs.map((d) => d.title))].join("\n");
             toast.success(
               t("toast.affinityActivated", { count: activated.length }),
@@ -441,6 +455,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
           }
         })();
       } else if (evt.kind === "deactivated") {
+        set({ affinityActivated: [] });
         toast.success(t("toast.affinityDeactivated"), undefined, "activate");
         void get().rescan();
       } else if (evt.kind === "error") {
@@ -499,12 +514,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
     if (paths.length === 0) return;
 
     const prevSession = get().sessionActivated;
+    const prevAffinity = get().affinityActivated;
     const prevFonts = get().fonts;
     set({
       fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active } : f,
       ),
       sessionActivated: prevSession.filter((n) => n !== family),
+      affinityActivated: prevAffinity.filter((n) => n !== family),
     });
     try {
       await ipc.setFontsActive(paths, active);
@@ -512,6 +529,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       set({
         fonts: prevFonts,
         sessionActivated: prevSession,
+        affinityActivated: prevAffinity,
       });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
     }
@@ -921,11 +939,13 @@ export const useFontStore = create<FontStore>((set, get) => ({
     if (paths.length === 0) return;
     const prevFonts = get().fonts;
     const prevSession = get().sessionActivated;
+    const prevAffinity = get().affinityActivated;
     set({
       fonts: prevFonts.map((f) =>
         families.includes(f.family) && f.deactivatable ? { ...f, active } : f,
       ),
       sessionActivated: prevSession.filter((n) => !families.includes(n)),
+      affinityActivated: prevAffinity.filter((n) => !families.includes(n)),
     });
     try {
       await ipc.setFontsActive(paths, active);
@@ -938,7 +958,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         { label: t("toast.undo"), run: () => void get().setFamiliesActiveBulk(families, !active) },
       );
     } catch (e) {
-      set({ fonts: prevFonts, sessionActivated: prevSession });
+      set({ fonts: prevFonts, sessionActivated: prevSession, affinityActivated: prevAffinity });
       toast.error(t("toast.bulkUpdateFailed"), String(e));
     }
   },
@@ -1381,6 +1401,7 @@ export function selectVisibleFamilies(s: {
   collections: Record<string, string[]>;
   favorites: string[];
   sessionActivated: string[];
+  affinityActivated: string[];
   lastImported: string[];
   notes: Record<string, string>;
   search: string;
@@ -1417,6 +1438,9 @@ export function selectVisibleFamilies(s: {
   }
   if (s.browse === "activatedSession") {
     browsePred = (f) => s.sessionActivated.includes(f.name);
+  }
+  if (s.browse === "affinity") {
+    browsePred = (f) => s.affinityActivated.includes(f.name);
   }
   if (s.browse === "deactivated") browsePred = (f) => !f.active;
   if (s.browse === "system") {
@@ -1575,46 +1599,19 @@ const FOUNDRY_SUFFIXES = new Set([
   "sas", "sarl", "srl", "spa", "ab", "as", "oy", "aps",
 ]);
 
-/** Lowercase, strip diacritics/punctuation and drop corporate suffix words. */
+/** Comparison key only: keep original metadata for display and search. */
 function normalizeFoundry(name: string): string {
-  return name
+  const words = name
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, " ")
     .split(/\s+/)
-    .filter((w) => w.length > 0 && !FOUNDRY_SUFFIXES.has(w))
-    .join(" ");
-}
-
-/** Levenshtein-based similarity in [0, 1]. */
-function stringSimilarity(a: string, b: string): number {
-  if (a === b) return 1;
-  if (!a || !b) return 0;
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(
-        prev[j] + 1,
-        cur[j - 1] + 1,
-        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-    }
-    prev = cur;
+    .filter(Boolean);
+  // Only trailing corporate words are suffixes. Never erase an entire name.
+  while (words.length > 1 && FOUNDRY_SUFFIXES.has(words[words.length - 1])) {
+    words.pop();
   }
-  return 1 - prev[b.length] / Math.max(a.length, b.length);
-}
-
-/** Two normalized foundry names are considered the same company. */
-function sameFoundry(a: string, b: string): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  // "Monotype" vs "Monotype Imaging" — one is a word-prefix of the other.
-  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b + " ") || b.startsWith(a + " "))) {
-    return true;
-  }
-  return stringSimilarity(a, b) >= 0.82;
+  return words.join("") || name.trim().toLowerCase();
 }
 
 const foundryGroupCache = new WeakMap<object, Map<string, string>>();
@@ -1638,17 +1635,13 @@ export function foundryGroupsFor(
     const sorted = [...rawCounts.entries()].sort(
       ([a, ca], [b, cb]) => cb - ca || a.localeCompare(b),
     );
-    const clusters: { norm: string; display: string }[] = [];
+    const clusters = new Map<string, string>();
     groups = new Map();
     for (const [raw] of sorted) {
       const norm = normalizeFoundry(raw);
-      const cluster = clusters.find((c) => sameFoundry(c.norm, norm));
-      if (cluster) {
-        groups.set(raw, cluster.display);
-      } else {
-        clusters.push({ norm, display: raw });
-        groups.set(raw, raw);
-      }
+      const display = clusters.get(norm) ?? raw;
+      clusters.set(norm, display);
+      groups.set(raw, display);
     }
     foundryGroupCache.set(families, groups);
   }

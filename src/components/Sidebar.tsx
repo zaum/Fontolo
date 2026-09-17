@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Star, Tag, Trash2 } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
@@ -189,12 +189,16 @@ export function Sidebar() {
 
   const familyCount = familiesFor(fonts, tags).size;
   const sessionActivated = useFontStore((s) => s.sessionActivated);
+  const affinityActivated = useFontStore((s) => s.affinityActivated);
   const allFamilies = [...familiesFor(fonts, tags).values()];
   const activatedCount = allFamilies.filter(
     (f) => f.active && !sessionActivated.includes(f.name),
   ).length;
   const sessionCount = allFamilies.filter((f) =>
     sessionActivated.includes(f.name),
+  ).length;
+  const affinityCount = allFamilies.filter((f) =>
+    affinityActivated.includes(f.name),
   ).length;
   const deactivatedCount = allFamilies.filter((f) => !f.active).length;
   const systemCount = allFamilies.filter(
@@ -436,6 +440,16 @@ export function Sidebar() {
           icon={<Clock size={15} strokeWidth={1.5} />}
           label={t("side.activatedUntilClose")}
           count={sessionCount}
+          index={i++}
+        />
+        <NavRow
+          active={browse === "affinity"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("affinity")}
+          icon={<Sparkles size={15} strokeWidth={1.5} />}
+          label={t("side.affinityActivated")}
+          count={affinityCount}
           index={i++}
         />
         <NavRow

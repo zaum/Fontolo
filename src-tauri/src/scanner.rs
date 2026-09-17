@@ -3,7 +3,7 @@ use crate::parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::Emitter;
 use walkdir::WalkDir;
@@ -18,23 +18,85 @@ pub struct ScanProgress {
 /// Parse cache: a full rescan re-reads thousands of files, but the watcher
 /// fires on every save. Unchanged files (same size + mtime) reuse the faces
 /// parsed last time instead of hitting the disk again.
+///
+/// Memory bound: `CACHE_LIMIT` files *and* `CACHE_BYTES` bytes of parsed
+/// faces. On a 40k-file library the face vectors alone can reach hundreds of
+/// MB, so both caps are enforced together below.
 struct CacheEntry {
     len: u64,
     /// Modification time as nanoseconds since the epoch. A plain integer rather
     /// than a `SystemTime`, so the same value can be compared against, and
     /// written to, the persisted copy below.
     mtime: Option<u64>,
-    /// Monotonic use counter, updated on every hit. Drives the eviction order
-    /// below; deliberately not wall-clock time, which can jump backwards.
-    used: u64,
     faces: Vec<FontFace>,
 }
 
-static PARSE_CACHE: std::sync::OnceLock<Mutex<HashMap<PathBuf, CacheEntry>>> =
-    std::sync::OnceLock::new();
+/// Estimated retained allocation, excluding allocator and hash-table overhead.
+fn entry_bytes(path: &Path, entry: &CacheEntry) -> usize {
+    use std::mem::size_of;
+    path.as_os_str().len() + size_of::<CacheEntry>()
+        + entry.faces.capacity() * size_of::<FontFace>()
+        + entry.faces.iter().map(|f| {
+            f.id.capacity() + f.path.capacity() + f.family.capacity() + f.style.capacity()
+                + [&f.preview_path, &f.postscript_name, &f.foundry, &f.license, &f.license_url]
+                    .iter().map(|s| s.as_ref().map_or(0, |s| s.capacity())).sum::<usize>()
+                + f.axes.capacity() * size_of::<crate::font_types::VariationAxis>()
+                + f.axes.iter().map(|a| a.tag.capacity()).sum::<usize>()
+                + f.scripts.capacity() * size_of::<String>()
+                + f.scripts.iter().map(|s| s.capacity()).sum::<usize>()
+        }).sum::<usize>()
+}
 
-fn parse_cache() -> &'static Mutex<HashMap<PathBuf, CacheEntry>> {
-    PARSE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+#[derive(Default)]
+struct ParseCache {
+    entries: HashMap<PathBuf, CacheEntry>,
+    bytes: usize,
+}
+
+impl std::ops::Deref for ParseCache {
+    type Target = HashMap<PathBuf, CacheEntry>;
+    fn deref(&self) -> &Self::Target { &self.entries }
+}
+
+impl ParseCache {
+    fn get_mut(&mut self, path: &Path) -> Option<&mut CacheEntry> {
+        self.entries.get_mut(path)
+    }
+
+    fn insert(&mut self, path: PathBuf, entry: CacheEntry) {
+        self.insert_bounded(path, entry, CACHE_LIMIT, CACHE_BYTES);
+    }
+
+    fn insert_bounded(&mut self, path: PathBuf, entry: CacheEntry, limit: usize, budget: usize) {
+        // Invalidate changed files even when their new metadata cannot fit.
+        if let Some(old) = self.entries.remove(&path) {
+            self.bytes -= entry_bytes(&path, &old);
+        }
+        let bytes = entry_bytes(&path, &entry);
+        // Retain a stable subset instead of evicting entries that a sequential
+        // scan will need next. Overflow files still appear in the scan result.
+        if self.entries.len() >= limit || bytes > budget.saturating_sub(self.bytes) {
+            return;
+        }
+        self.bytes += bytes;
+        self.entries.insert(path, entry);
+    }
+
+    fn retain(&mut self, mut keep: impl FnMut(&PathBuf, &mut CacheEntry) -> bool) {
+        let bytes = &mut self.bytes;
+        self.entries.retain(|path, entry| {
+            if keep(path, entry) { true } else {
+                *bytes -= entry_bytes(path, entry);
+                false
+            }
+        });
+    }
+}
+
+static PARSE_CACHE: std::sync::OnceLock<Mutex<ParseCache>> = std::sync::OnceLock::new();
+
+fn parse_cache() -> &'static Mutex<ParseCache> {
+    PARSE_CACHE.get_or_init(|| Mutex::new(ParseCache::default()))
 }
 
 /// Bump when the persisted layout changes: a mismatch discards the file.
@@ -44,32 +106,15 @@ const CACHE_FORMAT: u32 = 1;
 /// faces would be reused and hide the fix.
 const CACHE_REVISION: u32 = 1;
 
-/// Upper bound on cached files: a very large library would otherwise pin an
-/// unbounded amount of memory (and a huge file on disk). Reaching it evicts
-/// the least recently used quarter instead of dropping everything, so a
-/// library bigger than the limit still caches the files it actually touches.
+/// Admission limits for retained parsed metadata, not for the visible library.
 const CACHE_LIMIT: usize = 40_000;
+const CACHE_BYTES: usize = 256 * 1024 * 1024;
 
 /// Source of the [`CacheEntry::used`] counter.
 static USE_TICK: AtomicU64 = AtomicU64::new(1);
 
 fn next_tick() -> u64 {
     USE_TICK.fetch_add(1, Ordering::Relaxed)
-}
-
-/// Makes room when the cache is at its limit by dropping the oldest quarter.
-/// Evicting a slice rather than clearing the whole map matters: a clear would
-/// throw away every entry loaded from disk, so the next save would persist
-/// only the tail of the walk and the cache could never warm up.
-fn evict_oldest_quarter(cache: &mut HashMap<PathBuf, CacheEntry>) {
-    if cache.len() < CACHE_LIMIT {
-        return;
-    }
-    let mut by_age: Vec<(u64, PathBuf)> = cache.iter().map(|(p, e)| (e.used, p.clone())).collect();
-    by_age.sort_unstable();
-    for (_, path) in by_age.into_iter().take(CACHE_LIMIT / 4) {
-        cache.remove(&path);
-    }
 }
 
 /// Set whenever the cache no longer matches what is on disk, so the writer can
@@ -134,10 +179,15 @@ fn mtime_ns(meta: Option<&std::fs::Metadata>) -> Option<u64> {
 fn load_disk_cache_once() {
     static LOADED: std::sync::Once = std::sync::Once::new();
     LOADED.call_once(|| {
-        let Ok(bytes) = std::fs::read(cache_file()) else {
+        let Ok(file) = std::fs::File::open(cache_file()) else {
             return;
         };
-        let Ok(disk) = serde_json::from_slice::<DiskCache>(&bytes) else {
+        // Reject oversized snapshots before allocating the deserialized tree.
+        if file.metadata().map_or(true, |m| m.len() > CACHE_BYTES as u64) {
+            return;
+        }
+        let reader = std::io::BufReader::new(std::io::Read::take(file, CACHE_BYTES as u64));
+        let Ok(disk) = serde_json::from_reader::<_, DiskCache>(reader) else {
             return;
         };
         // A different format, a bumped revision or another app version all
@@ -201,44 +251,46 @@ fn warm_from_cache(cache: &HashMap<PathBuf, CacheEntry>, managed: &Path) -> Vec<
     faces
 }
 
-/// Persists the cache so the next run can skip unchanged files. Returns at
-/// once: the write happens on its own thread, so it never delays publishing
-/// the scan result the UI is waiting for.
+/// One background writer streams the borrowed cache to disk. No cloned face
+/// tree or full JSON buffer is retained. The cache lock is held during writing;
+/// a concurrent scan may wait, but cannot publish an older snapshot afterward.
 pub fn save_disk_cache() {
-    if !CACHE_DIRTY.swap(false, Ordering::SeqCst) {
+    static WRITING: AtomicBool = AtomicBool::new(false);
+    if WRITING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
         return;
     }
-    let bytes = {
-        let Ok(cache) = parse_cache().lock() else {
-            return;
-        };
-        let disk = DiskCacheRef {
-            format: CACHE_FORMAT,
-            revision: CACHE_REVISION,
-            app_version: env!("CARGO_PKG_VERSION"),
-            entries: cache
-                .iter()
-                .map(|(path, entry)| DiskEntryRef {
-                    path: path.to_string_lossy().into_owned(),
-                    len: entry.len,
-                    mtime_ns: entry.mtime,
-                    faces: &entry.faces,
+    std::thread::spawn(|| {
+        while CACHE_DIRTY.swap(false, Ordering::SeqCst) {
+            let result = (|| -> std::io::Result<()> {
+                let cache = parse_cache().lock().map_err(|_| std::io::Error::other("cache lock poisoned"))?;
+                let disk = DiskCacheRef {
+                    format: CACHE_FORMAT,
+                    revision: CACHE_REVISION,
+                    app_version: env!("CARGO_PKG_VERSION"),
+                    entries: cache.iter().map(|(path, entry)| DiskEntryRef {
+                        path: path.to_string_lossy().into_owned(),
+                        len: entry.len,
+                        mtime_ns: entry.mtime,
+                        faces: &entry.faces,
+                    }).collect(),
+                };
+                let path = cache_file();
+                if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
+                write_cache_with(&path, |file| {
+                    let mut writer = std::io::BufWriter::new(file);
+                    serde_json::to_writer(&mut writer, &disk)?;
+                    std::io::Write::flush(&mut writer)
                 })
-                .collect(),
-        };
-        match serde_json::to_vec(&disk) {
-            Ok(serialized) => serialized,
-            Err(_) => return,
-        }
-    };
-    std::thread::spawn(move || {
-        let path = cache_file();
-        if let Some(parent) = path.parent() {
-            if std::fs::create_dir_all(parent).is_err() {
-                return;
+            })();
+            if result.is_err() {
+                CACHE_DIRTY.store(true, Ordering::SeqCst);
+                WRITING.store(false, Ordering::SeqCst);
+                return; // Retry on the next save request, not in a busy loop.
             }
         }
-        let _ = write_cache_file(&path, &bytes);
+        WRITING.store(false, Ordering::SeqCst);
+        // Cover a request arriving between the last dirty check and release.
+        if CACHE_DIRTY.load(Ordering::SeqCst) { save_disk_cache(); }
     });
 }
 
@@ -248,7 +300,12 @@ pub fn save_disk_cache() {
 /// `create_new`, so two concurrent savers can never claim each other's temp
 /// file (a fixed name would let the second rename steal the first writer's
 /// unfinished snapshot).
+#[cfg(test)]
 fn write_cache_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_cache_with(path, |file| std::io::Write::write_all(file, bytes))
+}
+
+fn write_cache_with(path: &Path, write: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>) -> std::io::Result<()> {
     use std::sync::atomic::{AtomicU64, Ordering};
     static WRITES: AtomicU64 = AtomicU64::new(0);
 
@@ -264,8 +321,10 @@ fn write_cache_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
             .create_new(true)
             .open(&tmp);
         match file {
-            Ok(_) => {
-                let written = std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+            Ok(mut file) => {
+                let written = write(&mut file);
+                drop(file);
+                let written = written.and_then(|()| std::fs::rename(&tmp, path));
                 if written.is_ok() {
                     return Ok(());
                 }
@@ -425,7 +484,6 @@ fn cached_parse(path: &Path, source: FontSource) -> Vec<FontFace> {
 
     let faces = parser::parse_font_file(path, source);
     if let Ok(mut cache) = parse_cache().lock() {
-        evict_oldest_quarter(&mut cache);
         cache.insert(
             key,
             CacheEntry {
@@ -487,6 +545,69 @@ mod tests {
         write_cache_file(&path, b"our complete snapshot").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"our complete snapshot");
         assert_eq!(std::fs::read(&occupied).unwrap(), b"another writer's unfinished snapshot");
+    }
+    #[test]
+    fn cache_save_preserves_numbered_temporary_files() {
+        let dir = TestDirectory::new();
+        let path = dir.0.join("scan-cache.json");
+        let occupied = path.with_extension("json.tmp.other-writer.0");
+        std::fs::write(&occupied, b"in progress").unwrap();
+        write_cache_file(&path, b"first snapshot").unwrap();
+        write_cache_file(&path, b"second snapshot").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"second snapshot");
+        assert_eq!(std::fs::read(&occupied).unwrap(), b"in progress");
+    }
+
+    #[test]
+    fn cache_budget_rejects_oversized_entries_and_tracks_replacements() {
+        let mut cache = ParseCache::default();
+        let (path, value) = entry("fonts/a.ttf", "a");
+        let budget = entry_bytes(&path, &value);
+        cache.insert_bounded(path.clone(), value, 10, budget);
+        assert_eq!(cache.bytes, budget);
+        let (_, mut large) = entry("fonts/a.ttf", "a");
+        large.faces[0].license = Some("x".repeat(2048));
+        cache.insert_bounded(path.clone(), large, 10, budget);
+        assert!(cache.is_empty());
+        assert_eq!(cache.bytes, 0);
+        let (_, value) = entry("fonts/a.ttf", "a");
+        cache.insert_bounded(path, value, 10, budget);
+        cache.retain(|_, _| false);
+        assert_eq!(cache.bytes, 0);
+    }
+
+    #[test]
+    fn cache_keeps_40000_entries_across_overflow_scans() {
+        let mut cache = ParseCache::default();
+        for _ in 0..2 {
+            for i in 0..40_100 {
+                let path = PathBuf::from(format!("fonts/{i}.ttf"));
+                if !cache.contains_key(&path) {
+                    cache.insert(path, CacheEntry {
+                        len: 0, mtime: None, used: 0, faces: Vec::new(),
+                    });
+                }
+            }
+            assert_eq!(cache.len(), CACHE_LIMIT);
+            assert!(cache.contains_key(Path::new("fonts/0.ttf")));
+            assert!(cache.contains_key(Path::new("fonts/39999.ttf")));
+            assert!(!cache.contains_key(Path::new("fonts/40000.ttf")));
+            assert!(cache.bytes <= CACHE_BYTES);
+        }
+    }
+
+    #[test]
+    fn failed_write_keeps_previous_snapshot_and_removes_own_temp() {
+        let dir = TestDirectory::new();
+        let path = dir.0.join("scan-cache.json");
+        std::fs::write(&path, b"previous").unwrap();
+        let result = write_cache_with(&path, |file| {
+            std::io::Write::write_all(file, b"partial")?;
+            Err(std::io::Error::other("simulated write failure"))
+        });
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"previous");
+        assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 1);
     }
 
     fn face(id: &str) -> FontFace {
