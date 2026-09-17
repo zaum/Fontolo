@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 import { Rows3 } from "lucide-react";
 import { spring, staggerDelay } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
-import { useFontStore, type Family } from "../state/fontStore";
+import { resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { useT } from "../lib/i18n";
 
 const WATERFALL_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96];
@@ -12,6 +12,7 @@ export function WaterfallView({ families }: { families: Family[] }) {
   const selectedFamily = useFontStore((s) => s.selectedFamily);
   const selection = useFontStore((s) => s.selection);
   const sampleText = useFontStore((s) => s.sampleText);
+  const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
 
   const focus =
     selection.length > 0 ? selection[0] : selectedFamily;
@@ -38,7 +39,7 @@ export function WaterfallView({ families }: { families: Family[] }) {
     );
   }
 
-  const text = sampleText.trim() || family.name;
+  const text = resolveSampleText(sampleText, sampleUseFontName, family.name);
   return (
     <div className="waterfall-view">
       <div className="waterfall-head">

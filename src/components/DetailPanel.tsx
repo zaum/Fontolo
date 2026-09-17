@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
 import { useFontCss, formatBytes, pathBasename } from "../lib/fontLoader";
-import { familiesFor, conflictsFor, useFontStore } from "../state/fontStore";
+import { familiesFor, conflictsFor, resolveSampleText, useFontStore } from "../state/fontStore";
 import { ipc, type FontFace, type VariationAxis } from "../lib/ipc";
 import { toast } from "../design/primitives/Toast";
 import { FormatBadge } from "./FamilyCard";
@@ -514,6 +514,7 @@ export function DetailPanel() {
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const uninstallFamily = useFontStore((s) => s.uninstallFamily);
   const sampleText = useFontStore((s) => s.sampleText);
+  const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
 
   const panelWidth = useFontStore((s) => s.panelWidth);
   const setPanelWidth = useFontStore((s) => s.setPanelWidth);
@@ -561,7 +562,7 @@ export function DetailPanel() {
     family?.faces[0] ??
     null;
   const { fontFamily } = useFontCss(lead);
-  const text = sampleText.trim() || family?.name || "";
+  const text = family ? resolveSampleText(sampleText, sampleUseFontName, family.name) : "";
 
   useEffect(() => {
     setFeatures([]);

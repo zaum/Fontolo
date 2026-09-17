@@ -635,6 +635,139 @@
   color: var(--accent-a);
 }
 
+/* Sample-text popup (toolbar T button). */
+.sample-wrap.topbar-sample {
+  flex: none;
+}
+.sample-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 40;
+  width: 300px;
+  max-height: min(480px, calc(100vh - 140px));
+  overflow-y: auto;
+  border-radius: 8px;
+  padding: 6px;
+  transform-origin: top left;
+}
+.sample-menu::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: var(--e3);
+  border-left: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-border);
+}
+.sample-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sample-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+.sample-label {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+.sample-preview {
+  font-size: var(--fs-13);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 230px;
+}
+.sort-active .sample-preview {
+  color: var(--text-primary);
+}
+/* The "font name as preview" option looks different on purpose. */
+.sample-fontname {
+  border: 1px dashed rgba(var(--ink-rgb), 0.18);
+  margin-top: 2px;
+}
+.sample-fontname-label {
+  font-style: italic;
+  color: var(--text-primary);
+}
+.sample-fontname-sub {
+  font-size: var(--fs-11);
+  font-style: italic;
+}
+.sample-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 11px;
+  border-radius: 4px;
+}
+.sample-custom-row:hover {
+  background: var(--e2);
+}
+.sample-custom-active {
+  background: rgba(124, 58, 237, 0.1);
+}
+.sample-custom-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: var(--fs-13);
+  padding: 6px 0;
+}
+.sample-custom-input::placeholder {
+  color: var(--text-tertiary);
+}
+.sample-delete {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+}
+.sample-delete:hover {
+  background: var(--e2);
+  color: var(--text-primary);
+}
+.sample-add-row {
+  color: var(--text-tertiary);
+}
+.sample-add-btn {
+  border: 1px dashed rgba(var(--ink-rgb), 0.18);
+  border-radius: 50%;
+}
+.sample-footer {
+  display: block;
+  width: 100%;
+  padding: 6px 11px 4px;
+  font-size: var(--fs-11);
+  text-align: left;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  transition: color var(--t-quick) ease, background var(--t-quick) ease;
+}
+.sample-footer:hover {
+  color: var(--accent-a);
+  background: var(--e2);
+  text-decoration: underline;
+}
+
 .view-toggle {
   display: flex;
   align-items: stretch;

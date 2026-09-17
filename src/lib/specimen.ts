@@ -5,6 +5,7 @@ import { toast } from "../design/primitives/Toast";
 import { loadFaceCss } from "./fontLoader";
 import { ipc } from "./ipc";
 import type { Family } from "../state/fontStore";
+import { resolveSampleText } from "../state/fontStore";
 import { t } from "./i18n";
 
 const W = 1100;
@@ -23,7 +24,11 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, max: number): st
   return `${t}…`;
 }
 
-export async function exportSpecimen(family: Family, sampleText: string) {
+export async function exportSpecimen(
+  family: Family,
+  sampleText: string,
+  sampleUseFontName = false,
+) {
   const dest = await save({
     title: t("specimen.saveTitle"),
     defaultPath: `${family.name.replace(/[\\/:*?"<>|]/g, "-")} specimen.png`,
@@ -31,7 +36,7 @@ export async function exportSpecimen(family: Family, sampleText: string) {
   });
   if (!dest) return;
   try {
-    const bytes = await renderSpecimenPng(family, sampleText);
+    const bytes = await renderSpecimenPng(family, sampleText, sampleUseFontName);
     // Base64 (~1.37x) instead of a JSON number array (~4x): multi-MB PNGs
     // no longer stall the UI while crossing the IPC bridge.
     let binary = "";
@@ -49,6 +54,7 @@ export async function exportSpecimen(family: Family, sampleText: string) {
 export async function renderSpecimenPng(
   family: Family,
   sampleText: string,
+  sampleUseFontName = false,
 ): Promise<Uint8Array> {
   const lead =
     family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
@@ -64,7 +70,7 @@ export async function renderSpecimenPng(
       })),
     );
 
-    const text = sampleText.trim() || t("preview.defaultSample");
+    const text = resolveSampleText(sampleText, sampleUseFontName, family.name) || t("preview.defaultSample");
     const inner = W - PAD * 2;
 
     const meter = document.createElement("canvas").getContext("2d");

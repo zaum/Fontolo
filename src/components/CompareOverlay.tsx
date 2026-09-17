@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { useEffect } from "react";
 import { springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
-import { familiesFor, useFontStore, type Family } from "../state/fontStore";
+import { familiesFor, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { FormatBadge } from "./FamilyCard";
 import { useT } from "../lib/i18n";
@@ -13,9 +13,10 @@ const COMPARE_SIZES = [14, 24, 40];
 function CompareColumn({ family, onRemove }: { family: Family; onRemove: () => void }) {
   const t = useT();
   const sampleText = useFontStore((s) => s.sampleText);
+  const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const lead = family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
   const { fontFamily } = useFontCss(lead);
-  const text = sampleText.trim() || family.name;
+  const text = resolveSampleText(sampleText, sampleUseFontName, family.name);
 
   return (
     <div className="compare-col">

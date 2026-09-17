@@ -273,7 +273,10 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
     {
       label: t("menu.exportSpecimen"),
       icon: <ImageIcon size={14} strokeWidth={1.5} />,
-      action: () => void exportSpecimen(family, useFontStore.getState().sampleText),
+      action: () => {
+        const st = useFontStore.getState();
+        return void exportSpecimen(family, st.sampleText, st.sampleUseFontName);
+      },
     },
     {
       label: t("menu.copyFamilyName"),

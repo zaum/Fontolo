@@ -7,13 +7,15 @@ import {
   FoldVertical,
   LayoutGrid,
   List,
+  Plus,
   RefreshCw,
   Search,
   Type,
   UnfoldVertical,
   X,
 } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { springSnappy, springSoft } from "../design/springs";
 import { SIZES, useFontStore, type SortMode } from "../state/fontStore";
 import type { Classification } from "../lib/ipc";
@@ -193,6 +195,201 @@ function FilterMenu() {
   );
 }
 
+function SampleMenu() {
+  const t = useT();
+  const sampleText = useFontStore((s) => s.sampleText);
+  const setSampleText = useFontStore((s) => s.setSampleText);
+  const useFontName = useFontStore((s) => s.sampleUseFontName);
+  const setUseFontName = useFontStore((s) => s.setSampleUseFontName);
+  const customs = useFontStore((s) => s.sampleCustoms);
+  const setCustoms = useFontStore((s) => s.setSampleCustoms);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open ]);
+
+  const pangram = t("preview.defaultSample");
+  const presets: { key: string; label: string; text: string }[] = [
+    { key: "upper", label: t("sample.upper"), text: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
+    { key: "lower", label: t("sample.lower"), text: "abcdefghijklmnopqrstuvwxyz" },
+    { key: "digits", label: t("sample.digits"), text: "0123456789" },
+    { key: "pangram", label: t("sample.pangram"), text: pangram },
+  ];
+
+  const pick = (text: string) => {
+    setSampleText(text);
+    setOpen(false);
+  };
+
+  const updateCustom = (index: number, next: string) => {
+    const prev = customs[index];
+    const updated = customs.map((c, i) => (i === index ? next : c));
+    setCustoms(updated);
+    if (sampleText === prev && !useFontName) setSampleText(next);
+  };
+
+  const removeCustom = (index: number) => {
+    setCustoms(customs.filter((_, i) => i !== index));
+  };
+
+  const addDraft = () => {
+    const clean = draft.trim();
+    if (!clean || customs.includes(clean)) return;
+    setCustoms([...customs, clean]);
+    setSampleText(clean);
+    setDraft("");
+  };
+
+  const PANGRAM_WIKI_URL = "https://en.wikipedia.org/wiki/Pangram";
+
+  return (
+    <div className="sort-wrap sample-wrap topbar-sample">
+      <motion.button
+        className={`sort-btn sample-btn ${open ? "sort-open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={t("top.sampleButton")}
+        title={sampleText.trim() || t("sample.fontName")}
+        whileTap={{ scale: 0.96 }}
+      >
+        <Type size={14} strokeWidth={1.5} />
+      </motion.button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="menu-backdrop" onClick={() => setOpen(false)} />
+            <motion.div
+              className="sample-menu glass-e3"
+              role="dialog"
+              aria-label={t("top.sampleButton")}
+              initial={{ opacity: 0, y: -6, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.13 } }}
+              transition={springSnappy}
+            >
+              <ul className="sample-list">
+                <li>
+                  <button
+                    className={
+                      useFontName ? "sort-item sort-active sample-fontname" : "sort-item sample-fontname"
+                    }
+                    onClick={() => {
+                      setUseFontName(true);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="sample-row">
+                      <span className="sample-label sample-fontname-label">
+                        {t("sample.fontName")}
+                      </span>
+                      <span className="sample-preview sample-fontname-sub">
+                        {t("sample.fontNameSub")}
+                      </span>
+                    </span>
+                    {useFontName && <Check size={13} strokeWidth={2} />}
+                  </button>
+                </li>
+              </ul>
+              <div className="sort-sep" role="none" />
+              <p className="filter-heading" role="none">
+                {t("sample.presets")}
+              </p>
+              <ul className="sample-list">
+                {presets.map((p) => {
+                  const active = !useFontName && sampleText === p.text;
+                  return (
+                    <li key={p.key}>
+                      <button
+                        className={active ? "sort-item sort-active" : "sort-item"}
+                        onClick={() => pick(p.text)}
+                      >
+                        <span className="sample-row">
+                          <span className="sample-label">{p.label}</span>
+                          <span className="sample-preview">{p.text}</span>
+                        </span>
+                        {active && <Check size={13} strokeWidth={2} />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="sort-sep" role="none" />
+              <p className="filter-heading" role="none">
+                {t("sample.custom")}
+              </p>
+              <ul className="sample-list">
+                {customs.map((c, i) => {
+                  const active = !useFontName && sampleText === c;
+                  return (
+                    <li
+                      key={i}
+                      className={`sample-custom-row ${active ? "sample-custom-active" : ""}`}
+                    >
+                      <input
+                        value={c}
+                        onChange={(e) => updateCustom(i, e.target.value)}
+                        onFocus={() => {
+                          if (sampleText !== c && !useFontName) setSampleText(c);
+                          else if (useFontName) setSampleText(c);
+                        }}
+                        aria-label={t("sample.customAria")}
+                        spellCheck={false}
+                        className="sample-custom-input"
+                      />
+                      <button
+                        className="sample-delete"
+                        onClick={() => removeCustom(i)}
+                        aria-label={t("sample.deleteCustom")}
+                      >
+                        <X size={13} strokeWidth={2} />
+                      </button>
+                    </li>
+                  );
+                })}
+                <li className="sample-custom-row sample-add-row">
+                  <button
+                    className="sample-delete sample-add-btn"
+                    onClick={addDraft}
+                    aria-label={t("sample.add")}
+                  >
+                    <Plus size={13} strokeWidth={2} />
+                  </button>
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addDraft();
+                    }}
+                    placeholder={t("sample.addPlaceholder")}
+                    aria-label={t("sample.addPlaceholder")}
+                    spellCheck={false}
+                    className="sample-custom-input"
+                  />
+                </li>
+              </ul>
+              <div className="sort-sep" role="none" />
+              <button
+                className="sample-footer"
+                onClick={() => void openUrl(PANGRAM_WIKI_URL).catch(() => {})}
+              >
+                {t("sample.morePangrams")}
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function ExpandAllButton() {
   const t = useT();
   const expandOpen = useFontStore((s) => s.expandOpen);
@@ -279,8 +476,6 @@ function CompareButton() {
 
 export function TopBar() {
   const t = useT();
-  const sampleText = useFontStore((s) => s.sampleText);
-  const setSampleText = useFontStore((s) => s.setSampleText);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setSizeIndex = useFontStore((s) => s.setSizeIndex);
   const viewMode = useFontStore((s) => s.viewMode);
@@ -320,16 +515,7 @@ export function TopBar() {
       </div>
       <span className="topbar-count tabular">{visibleCount}</span>
 
-      <div className="topbar-field topbar-sample">
-        <Type size={14} strokeWidth={1.5} className="field-icon" />
-        <input
-          value={sampleText}
-          onChange={(e) => setSampleText(e.target.value)}
-          placeholder={t("top.samplePlaceholder")}
-          aria-label={t("top.sampleAria")}
-          spellCheck={false}
-        />
-      </div>
+      <SampleMenu />
 
       <div className="topbar-size" style={{ "--fill": `${fill}%` } as CSSProperties}>
         <input

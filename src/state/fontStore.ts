@@ -160,6 +160,8 @@ interface FontStore {
   tourStep: number | null;
 
   sampleText: string;
+  sampleUseFontName: boolean;
+  sampleCustoms: string[];
   sizeIndex: number;
   viewMode: ViewMode;
   sort: SortMode;
@@ -232,6 +234,8 @@ interface FontStore {
   setDuplicateReport: (r: { names: string[]; at: number } | null) => void;
 
   setSampleText: (t: string) => void;
+  setSampleUseFontName: (on: boolean) => void;
+  setSampleCustoms: (customs: string[]) => void;
   setSizeIndex: (i: number) => void;
   setViewMode: (m: ViewMode) => void;
   setSort: (s: SortMode) => void;
@@ -259,6 +263,8 @@ function persistPrefs(get: () => FontStore) {
     const s = get();
     void ipc.setPrefs({
       sampleText: s.sampleText,
+      sampleUseFontName: s.sampleUseFontName,
+      sampleCustoms: s.sampleCustoms,
       sizeIndex: s.sizeIndex,
       viewMode: s.viewMode,
       sort: s.sort,
@@ -340,6 +346,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
   tourStep: null,
 
   sampleText: t("preview.defaultSample"),
+  sampleUseFontName: false,
+  sampleCustoms: [],
   sizeIndex: 3,
   viewMode: "grid",
   sort: "name",
@@ -369,6 +377,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
       const prefs = (await ipc.getPrefs()) ?? {};
       set({
         sampleText: typeof prefs.sampleText === "string" ? prefs.sampleText : get().sampleText,
+        sampleUseFontName: prefs.sampleUseFontName === true,
+        sampleCustoms: Array.isArray(prefs.sampleCustoms)
+          ? (prefs.sampleCustoms as unknown[]).filter((n): n is string => typeof n === "string").slice(0, 50)
+          : [],
         sizeIndex: typeof prefs.sizeIndex === "number" ? prefs.sizeIndex : get().sizeIndex,
         viewMode: (["grid", "list", "waterfall"] as const).includes(
           prefs.viewMode as ViewMode,
@@ -1203,7 +1215,15 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   setSampleText: (sampleText) => {
-    set({ sampleText });
+    set({ sampleText, sampleUseFontName: false });
+    persistPrefs(get);
+  },
+  setSampleUseFontName: (sampleUseFontName) => {
+    set({ sampleUseFontName });
+    persistPrefs(get);
+  },
+  setSampleCustoms: (sampleCustoms) => {
+    set({ sampleCustoms: sampleCustoms.slice(0, 50) });
     persistPrefs(get);
   },
   setSizeIndex: (sizeIndex) => {
@@ -1384,6 +1404,19 @@ export const useFontStore = create<FontStore>((set, get) => ({
 }));
 
 const styleOrder = (f: FontFace) => f.weight * 2 + (f.italic ? 1 : 0);
+
+// Single place that decides what a card actually renders: font-name mode
+// always shows the family name, otherwise the custom text (falling back to
+// the family name when the text is blank).
+export function resolveSampleText(
+  sampleText: string,
+  sampleUseFontName: boolean,
+  familyName: string,
+): string {
+  if (sampleUseFontName) return familyName;
+  const trimmed = sampleText.trim();
+  return trimmed || familyName;
+}
 
 export function computeFamilies(
   fonts: FontFace[],

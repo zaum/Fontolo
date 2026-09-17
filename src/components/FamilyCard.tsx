@@ -6,7 +6,7 @@ import { spring, springSnappy, springSoft, staggerDelay } from "../design/spring
 import { useFontCss } from "../lib/fontLoader";
 import { buildFamilyMenu } from "../lib/menus";
 import { openContextMenu } from "../design/primitives/ContextMenu";
-import { activeConflictsFor, conflictsFor, SIZES, useFontStore, type Family } from "../state/fontStore";
+import { activeConflictsFor, conflictsFor, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { playStar } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
@@ -76,6 +76,7 @@ function FacePreview({
 export const FamilyCard = memo(function FamilyCard({ family }: { family: Family }) {
   const t = useT();
   const sampleText = useFontStore((s) => s.sampleText);
+  const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const select = useFontStore((s) => s.select);
@@ -95,7 +96,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const size = SIZES[sizeIndex];
   const lead = family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
   const { fontFamily, failed } = useFontCss(lead);
-  const text = sampleText.trim() || family.name;
+  const text = resolveSampleText(sampleText, sampleUseFontName, family.name);
 
   return (
     <motion.article
