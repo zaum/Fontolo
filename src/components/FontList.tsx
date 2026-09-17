@@ -25,11 +25,13 @@ export function FontList({ families }: { families: Family[] }) {
 
   const selectedFamily = useFontStore((s) => s.selectedFamily);
   useEffect(() => {
-    if (!selectedFamily) return;
-    const idx = families.findIndex((f) => f.name === selectedFamily);
+    const focus =
+      selection.length > 0 ? selection[selection.length - 1] : selectedFamily;
+    if (!focus) return;
+    const idx = families.findIndex((f) => f.name === focus);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
 
-  }, [selectedFamily]);
+  }, [selectedFamily, selection]);
 
   return (
     <div className="list-wrap">

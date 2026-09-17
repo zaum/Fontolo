@@ -21,12 +21,15 @@ export function FontGrid({ families }: { families: Family[] }) {
   });
 
   const selectedFamily = useFontStore((s) => s.selectedFamily);
+  const selection = useFontStore((s) => s.selection);
   useEffect(() => {
-    if (!selectedFamily) return;
-    const idx = families.findIndex((f) => f.name === selectedFamily);
+    const focus =
+      selection.length > 0 ? selection[selection.length - 1] : selectedFamily;
+    if (!focus) return;
+    const idx = families.findIndex((f) => f.name === focus);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
 
-  }, [selectedFamily]);
+  }, [selectedFamily, selection]);
 
   const arriving = Date.now() - mountedAt.current < 1200;
 

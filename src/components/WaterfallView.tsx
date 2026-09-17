@@ -10,10 +10,13 @@ const WATERFALL_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 
 export function WaterfallView({ families }: { families: Family[] }) {
   const t = useT();
   const selectedFamily = useFontStore((s) => s.selectedFamily);
+  const selection = useFontStore((s) => s.selection);
   const sampleText = useFontStore((s) => s.sampleText);
 
+  const focus =
+    selection.length > 0 ? selection[0] : selectedFamily;
   const family =
-    families.find((f) => f.name === selectedFamily) ?? families[0] ?? null;
+    (focus ? families.find((f) => f.name === focus) : null) ?? families[0] ?? null;
   const lead =
     family?.faces.find((f) => f.style === "Regular") ?? family?.faces[0] ?? null;
   const { fontFamily } = useFontCss(lead);

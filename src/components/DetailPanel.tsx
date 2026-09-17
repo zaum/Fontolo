@@ -511,7 +511,6 @@ export function DetailPanel() {
   const selectedFamily = useFontStore((s) => s.selectedFamily);
   const fonts = useFontStore((s) => s.fonts);
   const tags = useFontStore((s) => s.tags);
-  const select = useFontStore((s) => s.select);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const uninstallFamily = useFontStore((s) => s.uninstallFamily);
   const sampleText = useFontStore((s) => s.sampleText);
@@ -650,7 +649,7 @@ export function DetailPanel() {
               >
                 <Star size={15} strokeWidth={1.5} />
               </motion.button>
-              <button className="detail-close" aria-label={t("detail.close")} onClick={() => select(null)}>
+              <button className="detail-close" aria-label={t("detail.close")} onClick={() => useFontStore.setState({ selectedFamily: null })}>
                 <X size={15} strokeWidth={1.5} />
               </button>
             </motion.header>

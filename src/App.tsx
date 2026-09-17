@@ -256,7 +256,9 @@ export default function App() {
         const order = st.visibleOrder;
         if (order.length === 0) return;
         e.preventDefault();
-        const cur = st.selectedFamily ? order.indexOf(st.selectedFamily) : -1;
+        const anchor =
+          st.selection.length > 0 ? st.selection[st.selection.length - 1] : null;
+        const cur = anchor ? order.indexOf(anchor) : -1;
         const next =
           e.key === "Home" ? 0
           : e.key === "End" ? order.length - 1
@@ -267,9 +269,11 @@ export default function App() {
       }
       if (e.key === " " && !inField) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen || !st.selectedFamily) return;
+        const target =
+          st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
+        if (st.compare || st.settingsOpen || st.helpOpen || !target) return;
         e.preventDefault();
-        const fam = familiesFor(st.fonts, st.tags).get(st.selectedFamily);
+        const fam = familiesFor(st.fonts, st.tags).get(target);
         if (fam?.deactivatable) {
           void st.setFamilyActive(fam.name, !fam.active);
         }
@@ -293,9 +297,11 @@ export default function App() {
 
       if ((e.key === "f" || e.key === "F") && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen || !st.selectedFamily) return;
+        const target =
+          st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
+        if (st.compare || st.settingsOpen || st.helpOpen || !target) return;
         e.preventDefault();
-        void st.toggleFavorite(st.selectedFamily);
+        void st.toggleFavorite(target);
       }
       if (e.key === "Delete" && !inField) {
         const st = useFontStore.getState();
@@ -310,9 +316,11 @@ export default function App() {
 
       if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
         const st = useFontStore.getState();
-        if (inField || st.compare || st.settingsOpen || st.helpOpen || !st.selectedFamily) return;
+        const target =
+          st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
+        if (inField || st.compare || st.settingsOpen || st.helpOpen || !target) return;
         e.preventDefault();
-        const fam = familiesFor(st.fonts, st.tags).get(st.selectedFamily);
+        const fam = familiesFor(st.fonts, st.tags).get(target);
         if (!fam) return;
         const card = document.querySelector(`[data-family="${CSS.escape(fam.name)}"]`);
         const r = card?.getBoundingClientRect();

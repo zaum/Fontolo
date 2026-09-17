@@ -110,7 +110,8 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           st.togglePick(family.name);
           return;
         }
-        // Opening the style list also selects the family (plain click). With
+        // Opening the style list also selects the family (plain click) without
+        // opening the detail panel. With
         // Ctrl/Shift the card behaves like a list row: toggle / extend the
         // selection, so the Compare button can arm on multi-selection.
         const mode =
@@ -139,9 +140,9 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
               const st = useFontStore.getState();
               // Same as the card body: expanding selects the family — but
               // only on a plain click; with modifiers the user is extending
-              // a selection, don't clobber it.
+              // a selection, don't clobber it. Never touches the detail panel.
               if (!st.comparePicking && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                st.select(family.name);
+                useFontStore.setState({ selection: [family.name] });
               }
               setExpanded((v) => !v);
             }}
@@ -272,7 +273,12 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             st.togglePick(family.name);
             return;
           }
-          select(detailsOpen ? null : family.name);
+          // The info strip is the ONLY place that opens the detail panel.
+          if (detailsOpen) {
+            useFontStore.setState({ selectedFamily: null });
+          } else {
+            select(family.name);
+          }
         }}
       >
         <Info size={17} strokeWidth={1.75} />

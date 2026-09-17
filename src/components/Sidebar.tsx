@@ -257,13 +257,16 @@ export function Sidebar() {
   // Auto-scroll only happens for a section whose filter is NOT manually
   // selected (scrolling a manually picked filter away would be confusing).
   const selectedFamily = useFontStore((s) => s.selectedFamily);
+  const selection = useFontStore((s) => s.selection);
+  const focused =
+    selection.length === 1 ? selection[0] : (selectedFamily ?? selection[0] ?? null);
 
   const related = useMemo(() => {
-    const fam = selectedFamily ? familiesFor(fonts, tags).get(selectedFamily) : undefined;
+    const fam = focused ? familiesFor(fonts, tags).get(focused) : undefined;
     return {
-      cols: selectedFamily
+      cols: focused
         ? Object.entries(collections)
-            .filter(([, members]) => members.includes(selectedFamily))
+            .filter(([, members]) => members.includes(focused))
             .map(([name]) => name)
         : [],
       tags: fam?.tags ?? [],
@@ -271,7 +274,7 @@ export function Sidebar() {
         ? (foundryGroupsFor(familiesFor(fonts, tags)).get(fam.foundry) ?? fam.foundry)
         : null,
     };
-  }, [selectedFamily, fonts, tags, collections]);
+  }, [focused, fonts, tags, collections]);
   const hasRelated =
     related.cols.length > 0 || related.tags.length > 0 || related.foundry !== null;
 
@@ -284,11 +287,11 @@ export function Sidebar() {
     else rowRefs.current.delete(key);
   };
   useEffect(() => {
-    if (!selectedFamily) return;
+    if (!focused) return;
     // Refs of the previous family are gone anyway (the rowRef prop moved on);
     // drop them so stale rows never win the scroll.
     for (const key of [...rowRefs.current.keys()]) {
-      if (!key.startsWith(selectedFamily + "|")) rowRefs.current.delete(key);
+      if (!key.startsWith(focused + "|")) rowRefs.current.delete(key);
     }
     const rank = (k: string) => (k.includes("|c:") ? 0 : k.includes("|t:") ? 1 : 2);
     const skip = (k: string) =>
@@ -300,7 +303,7 @@ export function Sidebar() {
       .sort((a, b) => rank(a) - rank(b))[0];
     rowRefs.current.get(first ?? "")?.scrollIntoView({ block: "nearest" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFamily]);
+  }, [focused]);
 
   const pickBrowse = (b: BrowseKind) => {
     if (b === "library") {
@@ -586,7 +589,7 @@ export function Sidebar() {
               count={(collections[name] ?? []).length}
               index={i++}
               related={hasRelated && related.cols.includes(name)}
-              rowRef={hasRelated && related.cols.includes(name) ? setRowRef(`${selectedFamily}|c:${name}`) : undefined}
+              rowRef={hasRelated && related.cols.includes(name) ? setRowRef(`${focused}|c:${name}`) : undefined}
               onContextMenu={(e) =>
                 openContextMenu(e, [
                   { label: translate("menu.rename"), action: () => setRenaming(name) },
@@ -659,7 +662,7 @@ export function Sidebar() {
               count={count}
               index={i++}
               related={hasRelated && related.tags.includes(tag)}
-              rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${selectedFamily}|t:${tag}`) : undefined}
+              rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}
               onContextMenu={(e) =>
                 openContextMenu(e, [
                   {
@@ -715,7 +718,7 @@ export function Sidebar() {
               count={count}
               index={i++}
               related={hasRelated && related.foundry === foundry}
-              rowRef={hasRelated && related.foundry === foundry ? setRowRef(`${selectedFamily}|f:${foundry}`) : undefined}
+              rowRef={hasRelated && related.foundry === foundry ? setRowRef(`${focused}|f:${foundry}`) : undefined}
             />
           ))}
           </div>

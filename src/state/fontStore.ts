@@ -1029,34 +1029,39 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   selectWith: (family, mode, order) => {
-    const { selection, selectedFamily } = get();
-    if (mode === "single" && selectedFamily === family && selection.length <= 1) {
-      set({ selection: [], selectedFamily: null });
+    // Selection only — never touches selectedFamily (the detail panel).
+    // The panel opens exclusively via the info button (select()).
+    const { selection } = get();
+    if (mode === "single" && selection.length === 1 && selection[0] === family) {
+      set({ selection: [] });
       return;
     }
     if (mode === "toggle") {
       const next = selection.includes(family)
         ? selection.filter((f) => f !== family)
         : [...selection, family];
-      set({ selection: next, selectedFamily: family });
+      set({ selection: next });
       return;
     }
-    if (mode === "range" && selectedFamily) {
-      const a = order.indexOf(selectedFamily);
-      const b = order.indexOf(family);
-      if (a !== -1 && b !== -1) {
-        const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
-        set({ selection: [...new Set([...selection, ...range])], selectedFamily: family });
-        return;
+    if (mode === "range") {
+      const anchor = selection.length > 0 ? selection[selection.length - 1] : null;
+      if (anchor) {
+        const a = order.indexOf(anchor);
+        const b = order.indexOf(family);
+        if (a !== -1 && b !== -1) {
+          const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+          set({ selection: [...new Set([...selection, ...range])] });
+          return;
+        }
       }
     }
-    set({ selection: [family], selectedFamily: family });
+    set({ selection: [family] });
   },
 
   selectAllVisible: () => {
     const order = get().visibleOrder;
     if (order.length === 0) return;
-    set({ selection: [...order], selectedFamily: order[order.length - 1] });
+    set({ selection: [...order] });
   },
 
   openCompare: (families) => set({ compare: families.slice(0, 4), comparePicking: false }),
