@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, GripVertical, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
-import { allFoundryCounts, allTags, familiesFor, foundryGroupsFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
+import { SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN, allFoundryCounts, allTags, familiesFor, foundryGroupsFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
 
@@ -215,6 +215,35 @@ export function Sidebar() {
   const setBrowse = useFontStore((s) => s.setBrowse);
   const setFilterSel = useFontStore((s) => s.setFilterSel);
   const setArea = useFontStore((s) => s.setArea);
+  const sidebarWidth = useFontStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useFontStore((s) => s.setSidebarWidth);
+  const asideRef = useRef<HTMLElement | null>(null);
+
+  // Drag resizes the DOM node directly (no re-render per mousemove), the
+  // store — and the persisted pref — is updated once on release.
+  const onSidebarResizeDown = useCallback(
+    (e: React.PointerEvent) => {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startW = useFontStore.getState().sidebarWidth;
+      let liveW = startW;
+      const onMove = (ev: PointerEvent) => {
+        liveW = Math.min(
+          SIDEBAR_WIDTH_MAX,
+          Math.max(SIDEBAR_WIDTH_MIN, startW + ev.clientX - startX),
+        );
+        if (asideRef.current) asideRef.current.style.width = `${liveW}px`;
+      };
+      const onUp = () => {
+        setSidebarWidth(liveW);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [setSidebarWidth],
+  );
 
   // ---- Selected-family ties ---------------------------------------------
   // When a family is selected, the sidebar highlights its tags, foundry and
@@ -363,11 +392,23 @@ export function Sidebar() {
   let i = 0;
   return (
     <motion.aside
+      ref={asideRef}
       className="sidebar"
+      style={{ width: sidebarWidth }}
       initial={{ x: -48, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={springSoft}
     >
+      <div
+        className="sidebar-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t("side.resize")}
+        onPointerDown={onSidebarResizeDown}
+        onDoubleClick={() => setSidebarWidth(SIDEBAR_WIDTH_DEFAULT)}
+      >
+        <GripVertical size={12} strokeWidth={1.5} />
+      </div>
       <div className="sidebar-scroll">
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">

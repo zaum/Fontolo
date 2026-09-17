@@ -28,6 +28,12 @@ import {
 
 export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96] as const;
 
+// Width of the left filter column (Sidebar). The current 248px is the
+// minimum — the column can only grow from there.
+export const SIDEBAR_WIDTH_MIN = 248;
+export const SIDEBAR_WIDTH_MAX = 520;
+export const SIDEBAR_WIDTH_DEFAULT = 248;
+
 // init() subscribes to backend events; React StrictMode runs the mounting
 // effect twice in dev, so guard it — a second run would attach every
 // listener twice and each toast would appear twice.
@@ -126,6 +132,7 @@ interface FontStore {
   notes: Record<string, string>;
   trash: TrashEntry[];
   panelWidth: number;
+  sidebarWidth: number;
 
   selection: string[];
 
@@ -198,6 +205,7 @@ interface FontStore {
   setFamiliesActiveBulk: (families: string[], active: boolean) => Promise<void>;
   applyFamilyInApp: (family: string, app: AdobeApp) => Promise<void>;
   setPanelWidth: (w: number) => void;
+  setSidebarWidth: (w: number) => void;
   selectWith: (family: string, mode: "single" | "toggle" | "range", order: string[]) => void;
   selectAllVisible: () => void;
   openCompare: (families: string[]) => void;
@@ -255,6 +263,7 @@ function persistPrefs(get: () => FontStore) {
       viewMode: s.viewMode,
       sort: s.sort,
       panelWidth: s.panelWidth,
+      sidebarWidth: s.sidebarWidth,
       motionPref: s.motionPref,
       soundPref: s.soundPref,
       themePref: s.themePref,
@@ -311,6 +320,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   notes: {},
   trash: [],
   panelWidth: 348,
+  sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   selection: [],
   visibleOrder: [],
   compare: null,
@@ -372,6 +382,13 @@ export const useFontStore = create<FontStore>((set, get) => ({
           typeof prefs.panelWidth === "number"
             ? Math.min(560, Math.max(300, prefs.panelWidth))
             : 348,
+        sidebarWidth:
+          typeof prefs.sidebarWidth === "number"
+            ? Math.min(
+                SIDEBAR_WIDTH_MAX,
+                Math.max(SIDEBAR_WIDTH_MIN, prefs.sidebarWidth),
+              )
+            : SIDEBAR_WIDTH_DEFAULT,
         motionPref: prefs.motionPref === "reduced" ? "reduced" : "system",
         soundPref: (["off", "subtle", "on"] as const).includes(prefs.soundPref as SoundLevel)
           ? (prefs.soundPref as SoundLevel)
@@ -1167,6 +1184,16 @@ export const useFontStore = create<FontStore>((set, get) => ({
 
   setPanelWidth: (panelWidth) => {
     set({ panelWidth: Math.min(560, Math.max(300, panelWidth)) });
+    persistPrefs(get);
+  },
+
+  setSidebarWidth: (sidebarWidth) => {
+    set({
+      sidebarWidth: Math.min(
+        SIDEBAR_WIDTH_MAX,
+        Math.max(SIDEBAR_WIDTH_MIN, sidebarWidth),
+      ),
+    });
     persistPrefs(get);
   },
 

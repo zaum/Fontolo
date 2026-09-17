@@ -109,7 +109,9 @@
 }
 
 .sidebar {
+  position: relative;
   width: 248px;
+  min-width: 248px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -122,6 +124,25 @@
   z-index: 2;
   min-height: 0;
   overflow: hidden;
+}
+
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  color: transparent;
+  z-index: 4;
+  transition: color var(--t-quick) ease, background var(--t-quick) ease;
+}
+.sidebar-resize:hover,
+.sidebar-resize:active {
+  color: var(--text-tertiary);
+  background: linear-gradient(270deg, var(--accent-glow-soft), transparent);
 }
 
 /* Sidebar scroll: scrollbar stays invisible until the pointer hovers the
