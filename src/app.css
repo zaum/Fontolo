@@ -137,12 +137,23 @@
   cursor: col-resize;
   color: transparent;
   z-index: 4;
+  touch-action: none;
   transition: color var(--t-quick) ease, background var(--t-quick) ease;
 }
 .sidebar-resize:hover,
 .sidebar-resize:active {
   color: var(--text-tertiary);
   background: linear-gradient(270deg, var(--accent-glow-soft), transparent);
+}
+
+/* While the sidebar is being dragged, freeze every inner transition and
+   keyframe animation (hover fades, skeleton shimmer, accent pill): the width
+   is mutated directly on the DOM node, so nothing may re-animate mid-drag. */
+.sidebar-resizing,
+.sidebar-resizing * {
+  transition: none !important;
+  animation: none !important;
+  user-select: none !important;
 }
 
 /* Sidebar scroll: scrollbar stays invisible until the pointer hovers the

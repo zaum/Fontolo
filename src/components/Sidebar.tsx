@@ -217,13 +217,18 @@ export function Sidebar() {
   const setArea = useFontStore((s) => s.setArea);
   const sidebarWidth = useFontStore((s) => s.sidebarWidth);
   const setSidebarWidth = useFontStore((s) => s.setSidebarWidth);
-  const asideRef = useRef<HTMLElement | null>(null);
 
-  // Drag resizes the DOM node directly (no re-render per mousemove), the
-  // store — and the persisted pref — is updated once on release.
+  // Drag resizes the aside node directly (no re-render per mousemove, so the
+  // accent pill and rows never re-animate mid-drag); the store — and the
+  // persisted pref — is updated once on release.
   const onSidebarResizeDown = useCallback(
     (e: React.PointerEvent) => {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      e.preventDefault();
+      const grip = e.currentTarget as HTMLElement;
+      const aside = grip.parentElement;
+      if (!aside) return;
+      grip.setPointerCapture(e.pointerId);
+      aside.classList.add("sidebar-resizing");
       const startX = e.clientX;
       const startW = useFontStore.getState().sidebarWidth;
       let liveW = startW;
@@ -232,9 +237,10 @@ export function Sidebar() {
           SIDEBAR_WIDTH_MAX,
           Math.max(SIDEBAR_WIDTH_MIN, startW + ev.clientX - startX),
         );
-        if (asideRef.current) asideRef.current.style.width = `${liveW}px`;
+        aside.style.width = `${liveW}px`;
       };
       const onUp = () => {
+        aside.classList.remove("sidebar-resizing");
         setSidebarWidth(liveW);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
@@ -392,7 +398,6 @@ export function Sidebar() {
   let i = 0;
   return (
     <motion.aside
-      ref={asideRef}
       className="sidebar"
       style={{ width: sidebarWidth }}
       initial={{ x: -48, opacity: 0 }}
