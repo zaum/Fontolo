@@ -303,6 +303,11 @@
 .nav-row:hover:not(.nav-active) {
   background: var(--e1);
 }
+/* A selected row keeps its white-on-accent look on hover — otherwise the
+   hover text color would turn it dark (unreadable in the light scheme). */
+.nav-row.nav-active:hover {
+  color: #fff;
+}
 .nav-active {
   color: #fff;
 }
@@ -995,6 +1000,11 @@
 }
 .face-row + .face-row {
   border-top: 1px solid rgba(var(--ink-rgb), 0.03);
+}
+.face-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
 }
 .face-style {
   font-size: var(--fs-11);
@@ -2381,6 +2391,9 @@
   background: var(--e2);
   color: var(--text-primary);
 }
+.rescan-btn.rescan-scanning {
+  color: var(--accent-a);
+}
 .rescan-icon {
   display: grid;
   place-items: center;
@@ -3527,67 +3540,6 @@
 }
 .bulktag-apply:hover:not(:disabled) {
   filter: brightness(1.1);
-}
-
-.selection-bar {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  translate: -50% 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: 10px;
-  padding: 9px 12px;
-}
-.selection-bar.selection-picking {
-  border: 1px solid color-mix(in srgb, var(--accent-a) 45%, transparent);
-}
-.selection-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-13);
-  font-weight: 500;
-  color: var(--text-primary);
-  padding-left: 3px;
-}
-.selection-step svg {
-  color: var(--accent-a);
-}
-.selection-compare-off {
-  opacity: 0.45;
-  cursor: default;
-}
-.selection-count {
-  font-size: var(--fs-12);
-  font-weight: 500;
-  color: var(--text-secondary);
-  padding-left: 3px;
-}
-.selection-compare {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-13);
-  font-weight: 500;
-  color: white;
-  padding: 7px 12px;
-  border-radius: 6px;
-  background: var(--accent-gradient);
-}
-.selection-kbd {
-  font-size: 10px;
-  min-width: 16px;
-  padding: 0 4px;
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: white;
-}
-.selection-hint {
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
 }
 
 .tour-invite {

@@ -12,7 +12,6 @@ import { TrashView } from "./components/TrashView";
 import { AboutView } from "./components/AboutView";
 import { WaterfallView } from "./components/WaterfallView";
 import { CompareOverlay } from "./components/CompareOverlay";
-import { SelectionBar } from "./components/SelectionBar";
 import { SettingsOverlay } from "./components/SettingsOverlay";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { CommandPalette } from "./components/CommandPalette";
@@ -347,7 +346,6 @@ export default function App() {
         </div>
       </div>
       <DropZone />
-      <SelectionBar />
       <CompareOverlay />
       <SettingsOverlay />
       <ShortcutsOverlay />

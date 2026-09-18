@@ -415,7 +415,7 @@ function RescanButton() {
   const scanning = useFontStore((s) => s.phase === "scanning");
   return (
     <motion.button
-      className="rescan-btn"
+      className={`rescan-btn ${scanning ? "rescan-scanning" : ""}`}
       aria-label={t("top.rescan")}
       disabled={scanning}
       onClick={() => void rescan()}

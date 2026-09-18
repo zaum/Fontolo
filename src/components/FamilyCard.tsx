@@ -29,6 +29,7 @@ function FacePreview({
 }) {
   const t = useT();
   const { fontFamily, failed } = useFontCss(face);
+  const setFontFileActive = useFontStore((s) => s.setFontFileActive);
   return (
     <div className="face-row">
       <span className="face-style">{face.style}</span>
@@ -52,6 +53,14 @@ function FacePreview({
       ) : (
         <span className="skeleton face-skeleton" />
       )}
+      <span className="face-toggle">
+        <PillToggle
+          on={face.active}
+          disabled={!face.deactivatable}
+          onChange={(on) => void setFontFileActive(face.path, on)}
+          label={t(face.active ? "card.deactivate" : "card.activate", { name: face.style })}
+        />
+      </span>
     </div>
   );
 }
