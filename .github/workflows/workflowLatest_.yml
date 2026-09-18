@@ -1,4 +1,4 @@
-name: Build ZFontManager (Windows + macOS + Linux)
+name: Build Fontoló (Windows + macOS + Linux)
 
 on:
   workflow_dispatch:
@@ -348,7 +348,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: ZFontManager ${{ steps.meta.outputs.tag }}
+          name: Fontoló ${{ steps.meta.outputs.tag }}
           draft: true
           prerelease: false
           files: release/*

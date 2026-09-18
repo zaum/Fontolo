@@ -42,7 +42,7 @@ export function Titlebar() {
       <div className="titlebar-brand" data-tauri-drag-region>
         <img className="brand-mark" src="/icon.png" alt="" draggable={false} />
         <span className="titlebar-title" data-tauri-drag-region>
-          FontManager
+          Fontoló
         </span>
       </div>
       <div className="titlebar-controls">

@@ -1,6 +1,6 @@
 import { openUrl as openInBrowser } from "@tauri-apps/plugin-opener";
 import { motion } from "motion/react";
-import { ArrowUpRight, Download, Globe } from "lucide-react";
+import { ArrowUpRight, Download } from "lucide-react";
 import { spring, springSoft, staggerDelay } from "../design/springs";
 import { toast } from "../design/primitives/Toast";
 import { t as translate, useT, type TKey } from "../lib/i18n";
@@ -21,26 +21,20 @@ function openUrl(url: string) {
 const LINKS: { key: TKey; sub: string; url: string; icon: React.ReactNode }[] = [
   {
     key: "about.githubUser",
-    sub: "github.com/TheHolyOneZ",
-    url: "https://github.com/TheHolyOneZ",
+    sub: "github.com/zaum",
+    url: "https://github.com/zaum",
     icon: <GithubGlyph />,
   },
   {
-    key: "about.moreProjects",
-    sub: "zsync.eu",
-    url: "https://zsync.eu",
-    icon: <Globe size={16} strokeWidth={1.5} />,
-  },
-  {
     key: "about.landing",
-    sub: "zsync.eu/zfontmanager",
-    url: "https://zsync.eu/zfontmanager/",
+    sub: "github.com/zaum/fontolo",
+    url: "https://github.com/zaum/fontolo/",
     icon: <Download size={16} strokeWidth={1.5} />,
   },
   {
     key: "about.source",
-    sub: "github.com/TheHolyOneZ/ZFontManager",
-    url: "https://github.com/TheHolyOneZ/ZFontManager",
+    sub: "github.com/zaum/fontolo",
+    url: "https://github.com/zaum/fontolo",
     icon: <GithubGlyph />,
   },
 ];
@@ -57,7 +51,7 @@ export function AboutView() {
       transition={spring}
     >
       <img className="about-icon" src="/icon-512.png" alt="" draggable={false} />
-      <h1 className="about-name">ZFontManager</h1>
+      <h1 className="about-name">Fontoló</h1>
       <div className="about-version tabular">
         {t("about.version", { version: APP_VERSION, license: APP_LICENSE })}
       </div>

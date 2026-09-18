@@ -1,11 +1,11 @@
 [package]
-name = "zfontmanager"
+name = "fontolo"
 version = "0.3.0"
 description = "Cross-platform font manager: preview, tag, activate/deactivate, and install fonts"
-authors = ["TheHolyOneZ"]
+authors = ["zaum"]
 license = "GPL-3.0-only"
-homepage = "https://zsync.eu/zfontmanager/"
-repository = "https://github.com/TheHolyOneZ/ZFontManager"
+homepage = "https://github.com/zaum/fontolo/"
+repository = "https://github.com/zaum/fontolo"
 edition = "2021"
 
 [lib]

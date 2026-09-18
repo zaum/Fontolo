@@ -32,10 +32,10 @@ import { LanguageSelect } from "./LanguageSelect";
 import { APP_LICENSE, APP_VERSION } from "../lib/version";
 
 const TRANSLATE_GUIDE_URL =
-  "https://github.com/TheHolyOneZ/ZFontManager/blob/main/docs/TRANSLATING.md";
+  "https://github.com/zaum/fontolo";
 
 const REQUEST_LANGUAGE_URL =
-  "https://github.com/TheHolyOneZ/ZFontManager/issues/new?title=Language%20request%3A%20";
+  "https://github.com/zaum/fontolo/issues/new?title=Language%20request%3A%20";
 
 type SettingsCategoryId = "language" | "library" | "autoActivation" | "appearance";
 
@@ -548,7 +548,7 @@ export function SettingsOverlay() {
 
               <footer className="settings-footer tabular">
                 <img className="settings-footer-icon" src="/favicon.png" alt="" draggable={false} />
-                ZFontManager {APP_VERSION} · {APP_LICENSE} · {t("settings.footerNote")} ·{" "}
+                Fontoló {APP_VERSION} · {APP_LICENSE} · {t("settings.footerNote")} ·{" "}
                 <button
                   className="settings-replay"
                   onClick={() => {
