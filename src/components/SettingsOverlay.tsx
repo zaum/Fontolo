@@ -2,7 +2,6 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowUpRight,
-  BookOpen,
   DatabaseBackup,
   Eye,
   FolderDown,
@@ -30,9 +29,6 @@ import { useT } from "../lib/i18n";
 import type { TKey } from "../lib/i18n";
 import { LanguageSelect } from "./LanguageSelect";
 import { APP_LICENSE, APP_VERSION } from "../lib/version";
-
-const TRANSLATE_GUIDE_URL =
-  "https://github.com/zaum/fontolo";
 
 const REQUEST_LANGUAGE_URL =
   "https://github.com/zaum/fontolo/issues/new?title=Language%20request%3A%20";
@@ -217,20 +213,12 @@ export function SettingsOverlay() {
                         </div>
                         <LanguageSelect />
                       </div>
-                      <div className="settings-translate">
+                                                                                        <div className="settings-translate">
                         <div className="settings-translate-text">
                           <div className="settings-translate-title">{t("settings.translateTitle")}</div>
                           <div className="settings-sub">{t("settings.translateSub")}</div>
                         </div>
                         <div className="settings-data-actions">
-                          <button
-                            className="settings-data-btn"
-                            onClick={() => void openUrl(TRANSLATE_GUIDE_URL).catch(() => {})}
-                          >
-                            <BookOpen size={13} strokeWidth={1.5} />
-                            {t("settings.translateGuide")}
-                            <ArrowUpRight size={12} strokeWidth={1.5} className="settings-btn-arrow" />
-                          </button>
                           <button
                             className="settings-data-btn"
                             onClick={() => void openUrl(REQUEST_LANGUAGE_URL).catch(() => {})}

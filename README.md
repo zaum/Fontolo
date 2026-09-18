@@ -2,7 +2,7 @@
 
 The free, open-source font manager for Linux, Windows and macOS.
 
-Preview, organize, activate and install fonts from one clean, fast, native app. Your fonts never leave your machine.
+Preview, organize, activate and install fonts from one clean, fast, native app.
 
 ## Features
 
@@ -12,7 +12,6 @@ Preview, organize, activate and install fonts from one clean, fast, native app. 
 * Full-text search, filters, waterfall and side-by-side compare views
 * Drag and drop install, trash with restore, specimen export
 * Affinity, Photoshop and Illustrator integration
-* Nine interface languages
 
 ## Core code based on
 
