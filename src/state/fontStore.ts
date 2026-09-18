@@ -71,7 +71,7 @@ const scanQueue = new ScanQueue(async (isCurrent) => {
   }
 });
 
-export type ViewMode = "grid" | "list" | "waterfall";
+export type ViewMode = "grid" | "waterfall";
 export type MotionPref = "system" | "reduced";
 export type SortMode = "name" | "styles" | "size";
 export type Nav =
@@ -385,7 +385,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
           typeof prefs.sizeIndex === "number"
             ? Math.min(SIZES.length - 1, Math.max(0, Math.floor(prefs.sizeIndex)))
             : get().sizeIndex,
-        viewMode: (["grid", "list", "waterfall"] as const).includes(
+        viewMode: (["grid", "waterfall"] as const).includes(
           prefs.viewMode as ViewMode,
         )
           ? (prefs.viewMode as ViewMode)

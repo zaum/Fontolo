@@ -9,7 +9,6 @@ import {
   Languages,
   LayoutGrid,
   Library,
-  List,
   Monitor,
   PenTool,
   Power,
@@ -148,12 +147,6 @@ export function CommandPalette() {
         label: t("palette.viewGrid"),
         icon: <LayoutGrid size={14} strokeWidth={1.5} />,
         run: () => s.setViewMode("grid"),
-      },
-      {
-        id: "view-list",
-        label: t("palette.viewList"),
-        icon: <List size={14} strokeWidth={1.5} />,
-        run: () => s.setViewMode("list"),
       },
       {
         id: "view-waterfall",

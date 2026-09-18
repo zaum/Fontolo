@@ -6,7 +6,6 @@ import { DetailPanel } from "./components/DetailPanel";
 import { Titlebar } from "./components/Titlebar";
 import { DropZone } from "./components/DropZone";
 import { FontGrid } from "./components/FontGrid";
-import { FontList } from "./components/FontList";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { TrashView } from "./components/TrashView";
@@ -207,11 +206,7 @@ function MainContent() {
       />
     );
   if (viewMode === "waterfall") return <WaterfallView families={families} />;
-  return viewMode === "grid" ? (
-    <FontGrid families={families} />
-  ) : (
-    <FontList families={families} />
-  );
+  return <FontGrid families={families} />;
 }
 
 export default function App() {
@@ -282,7 +277,7 @@ export default function App() {
       if ((e.key === "a" || e.key === "A") && !inField && (e.ctrlKey || e.metaKey)) {
         const st = useFontStore.getState();
         if (st.compare || st.settingsOpen || st.helpOpen || st.paletteOpen) return;
-        if (st.viewMode !== "grid" && st.viewMode !== "list") return;
+        if (st.viewMode !== "grid") return;
         if (st.visibleOrder.length === 0) return;
         e.preventDefault();
         st.selectAllVisible();

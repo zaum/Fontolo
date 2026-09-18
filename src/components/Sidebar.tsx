@@ -206,6 +206,29 @@ export function Sidebar() {
   ).length;
   const tagCounts = allTags(tags);
   const foundryCounts = allFoundryCounts(fonts, tags);
+  // Foundries with more than one family come first (largest count first),
+  // then a divider, then the singletons in ABC order.
+  const foundryMulti = [...foundryCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const foundrySingle = [...foundryCounts.entries()]
+    .filter(([, count]) => count <= 1)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const renderFoundryRow = ([foundry, count]: [string, number]) => (
+    <NavRow
+      key={foundry}
+      active={foundrySel.includes(foundry)}
+      lead={foundryLead === foundry}
+      pillId="nav-pill-foundry"
+      onPick={(e) => pickFromList(e, "foundrys", foundry)}
+      icon={<Building2 size={15} strokeWidth={1.5} />}
+      label={foundry}
+      count={count}
+      index={i++}
+      related={hasRelated && related.foundry === foundry}
+      rowRef={hasRelated && related.foundry === foundry ? setRowRef(`${focused}|f:${foundry}`) : undefined}
+    />
+  );
   const collectionNames = Object.keys(collections).sort((a, b) => a.localeCompare(b));
   const browse = useFontStore((s) => s.browseSel);
   const colSel = useFontStore((s) => s.colSel);
@@ -263,18 +286,23 @@ export function Sidebar() {
 
   const related = useMemo(() => {
     const fam = focused ? familiesFor(fonts, tags).get(focused) : undefined;
+    const group = fam?.foundry
+      ? (foundryGroupsFor(familiesFor(fonts, tags)).get(fam.foundry) ?? fam.foundry)
+      : null;
+    // Rows already picked as manual filters keep their active pill — never
+    // pile the related tint on top of it (the two combined invert to
+    // unreadable).
     return {
       cols: focused
         ? Object.entries(collections)
             .filter(([, members]) => members.includes(focused))
             .map(([name]) => name)
+            .filter((name) => !colSel.includes(name))
         : [],
-      tags: fam?.tags ?? [],
-      foundry: fam?.foundry
-        ? (foundryGroupsFor(familiesFor(fonts, tags)).get(fam.foundry) ?? fam.foundry)
-        : null,
+      tags: (fam?.tags ?? []).filter((tag) => !tagSel.includes(tag)),
+      foundry: group && !foundrySel.includes(group) ? group : null,
     };
-  }, [focused, fonts, tags, collections]);
+  }, [focused, fonts, tags, collections, colSel, tagSel, foundrySel]);
   const hasRelated =
     related.cols.length > 0 || related.tags.length > 0 || related.foundry !== null;
 
@@ -417,7 +445,7 @@ export function Sidebar() {
       >
         <GripVertical size={12} strokeWidth={1.5} />
       </div>
-      <div className="sidebar-scroll">
+      <div className="sidebar-fixed">
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">
           <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setBrowseOpen((o) => !o)} aria-expanded={browseOpen} style={{ flex: 1 }}>
@@ -525,6 +553,8 @@ export function Sidebar() {
         )}
         </AnimatePresence>
       </div>
+      </div>
+      <div className="sidebar-scroll">
 
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">
@@ -706,21 +736,11 @@ export function Sidebar() {
               style={{ overflow: "hidden" }}
             >
           <div className="sidebar-list sidebar-list-scrollable">
-          {[...foundryCounts.entries()].map(([foundry, count]) => (
-            <NavRow
-              key={foundry}
-              active={foundrySel.includes(foundry)}
-              lead={foundryLead === foundry}
-              pillId="nav-pill-foundry"
-              onPick={(e) => pickFromList(e, "foundrys", foundry)}
-              icon={<Building2 size={15} strokeWidth={1.5} />}
-              label={foundry}
-              count={count}
-              index={i++}
-              related={hasRelated && related.foundry === foundry}
-              rowRef={hasRelated && related.foundry === foundry ? setRowRef(`${focused}|f:${foundry}`) : undefined}
-            />
-          ))}
+          {foundryMulti.map(renderFoundryRow)}
+          {foundryMulti.length > 0 && foundrySingle.length > 0 && (
+            <div className="sidebar-divider" role="separator" />
+          )}
+          {foundrySingle.map(renderFoundryRow)}
           </div>
             </motion.div>
           )}

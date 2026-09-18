@@ -35,12 +35,6 @@ const STEPS: TourStep[] = [
     body: "tour.search.body",
   },
   {
-    target: ".view-toggle",
-    title: "tour.views.title",
-    body: "tour.views.body",
-    onEnter: () => useFontStore.setState({ viewMode: "grid" }),
-  },
-  {
     target: ".family-card",
     title: "tour.card.title",
     body: "tour.card.body",

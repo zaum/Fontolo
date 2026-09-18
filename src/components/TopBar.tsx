@@ -5,8 +5,6 @@ import {
   Columns2,
   Filter,
   FoldVertical,
-  LayoutGrid,
-  List,
   Plus,
   RefreshCw,
   Search,
@@ -478,8 +476,6 @@ export function TopBar() {
   const t = useT();
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setSizeIndex = useFontStore((s) => s.setSizeIndex);
-  const viewMode = useFontStore((s) => s.viewMode);
-  const setViewMode = useFontStore((s) => s.setViewMode);
   const search = useFontStore((s) => s.search);
   const setSearch = useFontStore((s) => s.setSearch);
   const visibleCount = useFontStore((s) => s.visibleOrder.length);
@@ -539,25 +535,6 @@ export function TopBar() {
       <CompareButton />
 
       <RescanButton />
-
-      <div className="view-toggle" role="tablist" aria-label={t("top.viewMode")}>
-        {(["grid", "list"] as const).map((mode) => (
-          <motion.button
-            key={mode}
-            role="tab"
-            aria-selected={viewMode === mode}
-            className={`view-btn ${viewMode === mode ? "view-btn-active" : ""}`}
-            onClick={() => setViewMode(mode)}
-            whileTap={{ scale: 0.94 }}
-          >
-            {mode === "grid" ? (
-              <LayoutGrid size={15} strokeWidth={1.5} />
-            ) : (
-              <List size={15} strokeWidth={1.5} />
-            )}
-          </motion.button>
-        ))}
-      </div>
     </motion.header>
   );
 }

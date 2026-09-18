@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ChevronRight, Info, Star } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info, Star, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSnappy, springSoft } from "../design/springs";
@@ -7,7 +7,7 @@ import { useFontCss } from "../lib/fontLoader";
 import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
 import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
 import { activeConflictsFor, conflictsFor, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
-import { playStar } from "../lib/sound";
+import { playStar, playTag } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
 
@@ -62,6 +62,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
+  const setFamilyTags = useFontStore((s) => s.setFamilyTags);
   const select = useFontStore((s) => s.select);
   const selected = useFontStore((s) => s.selection.includes(family.name));
   const detailsOpen = useFontStore((s) => s.selectedFamily === family.name);
@@ -70,10 +71,14 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const hasActiveConflict = useFontStore((s) => activeConflictsFor(s.fonts).has(family.name));
   const hasDormantConflict = useFontStore((s) => conflictsFor(s.fonts).has(family.name));
   const [expanded, setExpanded] = useState(false);
+  // Which tag chip is "armed": clicking a chip reveals the remove badge
+  // floating above its top-right corner. Clicking it again disarms it.
+  const [armedTag, setArmedTag] = useState<string | null>(null);
   const expandSignal = useFontStore((s) => s.expandSignal);
   const expandOpen = useFontStore((s) => s.expandOpen);
   useEffect(() => {
-    setExpanded(expandOpen);
+    // Single-face families have nothing to expand — not even via "expand all".
+    setExpanded(expandOpen && family.faces.length > 1);
   }, [expandSignal]);
 
   const size = SIZES[sizeIndex];
@@ -89,6 +94,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         // Only the body toggles the style list — buttons (star, pill,
         // info strip, expander) handle themselves.
         if ((e.target as HTMLElement).closest("button")) return;
+        setArmedTag(null);
         const st = useFontStore.getState();
         if (st.comparePicking) {
           st.togglePick(family.name);
@@ -101,14 +107,60 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         const mode =
           e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
         st.selectWith(family.name, mode, st.visibleOrder);
-        setExpanded((v) => !v);
+        // Single-face families have no style list to open — clicking only
+        // selects them, it never expands.
+        if (family.faces.length > 1) setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
       <header className="card-head">
+        <motion.button
+          className={`star-btn ${favorite ? "star-on" : ""}`}
+          aria-label={t(favorite ? "card.unfavorite" : "card.favorite", { name: family.name })}
+          aria-pressed={favorite}
+          onClick={(e) => {
+            e.stopPropagation();
+            const st = useFontStore.getState();
+            if (st.selection.length > 1 && st.selection.includes(family.name)) {
+              playStar(true);
+              void st.favoriteMany(st.selection);
+              return;
+            }
+            playStar(!favorite);
+            void toggleFavorite(family.name);
+          }}
+          whileTap={{ scale: 0.85 }}
+        >
+          <Star size={14} strokeWidth={1.5} />
+        </motion.button>
         {family.tags.map((tag) => (
-          <span key={tag} className="tag-label">
-            {tag}
+          <span
+            key={tag}
+            className={`tag-chip tag-pick ${armedTag === tag ? "tag-pick-armed" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setArmedTag((cur) => (cur === tag ? null : tag));
+            }}
+          >
+            <span className="tag-pick-text">{tag}</span>
+            {armedTag === tag && (
+              <button
+                className="tag-unpin"
+                aria-label={t("tag.removeAria", { tag })}
+                title={t("tag.removeAria", { tag })}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playTag(false);
+                  setArmedTag(null);
+                  void setFamilyTags(
+                    family.name,
+                    family.tags.filter((x) => x !== tag),
+                  );
+                }}
+              >
+                <X size={10} strokeWidth={2.25} />
+              </button>
+            )}
           </span>
         ))}
         <button
@@ -175,25 +227,6 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             </span>
           )
         )}
-        <motion.button
-          className={`star-btn ${favorite ? "star-on" : ""}`}
-          aria-label={t(favorite ? "card.unfavorite" : "card.favorite", { name: family.name })}
-          aria-pressed={favorite}
-          onClick={(e) => {
-            e.stopPropagation();
-            const st = useFontStore.getState();
-            if (st.selection.length > 1 && st.selection.includes(family.name)) {
-              playStar(true);
-              void st.favoriteMany(st.selection);
-              return;
-            }
-            playStar(!favorite);
-            void toggleFavorite(family.name);
-          }}
-          whileTap={{ scale: 0.85 }}
-        >
-          <Star size={14} strokeWidth={1.5} />
-        </motion.button>
         <PillToggle
           on={family.active}
           disabled={!family.deactivatable}
