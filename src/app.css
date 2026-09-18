@@ -110,6 +110,7 @@
 
 .sidebar {
   position: relative;
+  container-type: inline-size;
   width: 248px;
   min-width: 248px;
   flex-shrink: 0;
@@ -261,6 +262,36 @@
   background: rgba(var(--ink-rgb), 0.14);
   border-radius: 999px;
 }
+/* Wide sidebar: tags, collections (and foundries) flow into two (then three)
+   columns when they fit. Single column below 360px. Cells may shrink so
+   long names truncate with an ellipsis; a hairline separates the columns. */
+.sidebar-cols > * {
+  min-width: 0;
+}
+@container (min-width: 360px) {
+  .sidebar-cols {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 6px;
+  }
+  .sidebar-cols > :not(.sidebar-divider):nth-child(2n) {
+    border-left: 1px solid rgba(var(--ink-rgb), 0.07);
+    padding-left: 6px;
+  }
+}
+@container (min-width: 540px) {
+  .sidebar-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .sidebar-cols > :nth-child(2n) {
+    border-left: none;
+    padding-left: 0;
+  }
+  .sidebar-cols > :not(.sidebar-divider):not(:nth-child(3n+1)) {
+    border-left: 1px solid rgba(var(--ink-rgb), 0.07);
+    padding-left: 6px;
+  }
+}
 .sidebar-section:first-child .sidebar-heading {
   padding-top: 6px;
 }
@@ -280,6 +311,7 @@
   margin: 5px 10px;
   background: rgba(var(--ink-rgb), 0.07);
   flex-shrink: 0;
+  grid-column: 1 / -1;
 }
 
 .nav-row {
@@ -2003,7 +2035,7 @@
   height: 20px;
   flex-shrink: 0;
   border-radius: 999px;
-  color: var(--text-tertiary);
+  color: var(--accent-a);
   transition: background var(--t-quick) ease, color var(--t-quick) ease;
 }
 .sidebar-reset:hover {

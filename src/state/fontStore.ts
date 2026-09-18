@@ -31,7 +31,7 @@ export const SIZES = [8, 14, 18, 24, 32, 48, 64, 96, 128] as const;
 // Width of the left filter column (Sidebar). The current 248px is the
 // minimum — the column can only grow from there.
 export const SIDEBAR_WIDTH_MIN = 248;
-export const SIDEBAR_WIDTH_MAX = 520;
+export const SIDEBAR_WIDTH_MAX = 640;
 export const SIDEBAR_WIDTH_DEFAULT = 248;
 
 // init() subscribes to backend events; React StrictMode runs the mounting

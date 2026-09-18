@@ -595,7 +595,7 @@ export function Sidebar() {
             }}
           />
         )}
-        <div className="sidebar-list">
+        <div className="sidebar-list sidebar-cols">
         {collectionNames.map((name) =>
           renaming === name ? (
             <RenameInput
@@ -679,7 +679,7 @@ export function Sidebar() {
               transition={springSoft}
               style={{ overflow: "hidden" }}
             >
-          <div className="sidebar-list">
+          <div className="sidebar-list sidebar-cols">
           {[...tagCounts.entries()].map(([tag, count]) => (
             <NavRow
               key={tag}
@@ -735,7 +735,7 @@ export function Sidebar() {
               transition={springSoft}
               style={{ overflow: "hidden" }}
             >
-          <div className="sidebar-list sidebar-list-scrollable">
+          <div className="sidebar-list sidebar-list-scrollable sidebar-cols">
           {foundryMulti.map(renderFoundryRow)}
           {foundryMulti.length > 0 && foundrySingle.length > 0 && (
             <div className="sidebar-divider" role="separator" />
