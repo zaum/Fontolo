@@ -2,10 +2,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronRight, Info, Star } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
-import { spring, springSnappy, springSoft, staggerDelay } from "../design/springs";
+import { spring, springSnappy, springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
-import { buildFamilyMenu } from "../lib/menus";
-import { openContextMenu } from "../design/primitives/ContextMenu";
+import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
+import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
 import { activeConflictsFor, conflictsFor, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { playStar } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
@@ -20,56 +20,39 @@ function FacePreview({
   face,
   text,
   size,
-  index,
   synthesize,
 }: {
   face: FontFace;
   text: string;
   size: number;
-  index: number;
   synthesize: boolean;
 }) {
   const t = useT();
   const { fontFamily, failed } = useFontCss(face);
   return (
-    <motion.div
-      className="face-row"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...spring, delay: staggerDelay(index) }}
-    >
+    <div className="face-row">
       <span className="face-style">{face.style}</span>
-      <AnimatePresence mode="wait">
-        {fontFamily ? (
-          <motion.span
-            key="real"
-            className="face-sample"
-            style={{
-              fontFamily,
-              fontSize: Math.min(size, 32),
-              fontStyle: face.italic ? "italic" : "normal",
+      {fontFamily ? (
+        <span
+          className="face-sample"
+          style={{
+            fontFamily,
+            fontSize: Math.min(size, 32),
+            fontStyle: face.italic ? "italic" : "normal",
 
-              fontWeight: synthesize ? face.weight : undefined,
-            }}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={spring}
-          >
-            {text}
-          </motion.span>
-        ) : failed ? (
-          <span key="failed" className="face-sample face-failed">
-            {t("card.previewUnavailable")}
-          </span>
-        ) : (
-          <motion.span
-            key="skeleton"
-            className="skeleton face-skeleton"
-            exit={{ opacity: 0, transition: { duration: 0.1 } }}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
+            fontWeight: synthesize ? face.weight : undefined,
+          }}
+        >
+          {text}
+        </span>
+      ) : failed ? (
+        <span className="face-sample face-failed">
+          {t("card.previewUnavailable")}
+        </span>
+      ) : (
+        <span className="skeleton face-skeleton" />
+      )}
+    </div>
   );
 }
 
@@ -99,7 +82,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const text = resolveSampleText(sampleText, sampleUseFontName, family.name);
 
   return (
-    <motion.article
+    <article
       className={`family-card ${selected ? "card-selected" : ""}`}
       data-family={family.name}
       onClick={(e) => {
@@ -121,15 +104,25 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
-
-      animate={{ scale: family.active ? 1 : 0.99 }}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: family.active ? 0.99 : 0.98 }}
-      transition={spring}
-      layout="position"
     >
       <header className="card-head">
-        <FormatBadge format={family.formats[0]} isVariable={family.isVariable} />
+        {family.tags.map((tag) => (
+          <span key={tag} className="tag-label">
+            {tag}
+          </span>
+        ))}
+        <button
+          className="tag-add"
+          aria-label={t("card.addTag")}
+          title={t("card.addTag")}
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            openContextMenuAt(r.left, r.bottom + 6, buildTagMenu(family.name));
+          }}
+        >
+          + {t("card.addTag")}
+        </button>
         <span className="card-name">{family.name}</span>
         {family.faces.length > 1 && (
           <motion.button
@@ -250,13 +243,12 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             exit={{ height: 0, opacity: 0, transition: { ...springSnappy } }}
             transition={springSoft}
           >
-            {family.faces.map((face, i) => (
+            {family.faces.map((face) => (
               <FacePreview
                 key={face.id}
                 face={face}
                 text={text}
                 size={size}
-                index={i}
                 synthesize={family.faces.filter((f) => f.path === face.path).length > 1}
               />
             ))}
@@ -284,6 +276,6 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
       >
         <Info size={17} strokeWidth={1.75} />
       </button>
-    </motion.article>
+    </article>
   );
 });

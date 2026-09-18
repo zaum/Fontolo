@@ -119,10 +119,15 @@ export function SettingsOverlay() {
   // The custom folder is in effect only when enabled with a folder picked.
   const customDirActive = settings.libraryDirEnabled && settings.libraryDir != null;
 
+  // A reachable server can still be unable to serve its SDK documentation (the
+  // preamble comes from Affinity's online hint pool), so a reachable connection
+  // with an error is reported as online *with* that error, not as a lost link.
   const affinityDetail = !affinityConnection
     ? t("settings.affinityChecking")
     : affinityConnection.reachable
-      ? `${t("settings.affinityOnline")}${affinityConnection.version ? ` · ${affinityConnection.version}` : ""} · ${t("settings.affinityDocs", { count: affinityConnection.docCount })}`
+      ? affinityConnection.error
+        ? `${t("settings.affinityOnline")} · ${affinityConnection.error}`
+        : `${t("settings.affinityOnline")}${affinityConnection.version ? ` · ${affinityConnection.version}` : ""} · ${t("settings.affinityDocs", { count: affinityConnection.docCount })}`
       : (affinityConnection.error
           ? `${t("settings.affinityOffline")} · ${affinityConnection.error}`
           : t("settings.affinityOffline"));
@@ -389,13 +394,6 @@ export function SettingsOverlay() {
                       <div className="detail-heading">{t("settings.autoActivationAffinity")}</div>
                       <div className="settings-row">
                         <div>
-                          <div className="settings-label">{t("settings.affinityConnection")}</div>
-                          <div className="settings-sub">{affinityDetail}</div>
-                        </div>
-                        <span className={`affinity-dot ${affinityDot}`} aria-hidden />
-                      </div>
-                      <div className="settings-row" data-relation="enable-below">
-                        <div>
                           <div className="settings-label">{t("settings.affinityEnable")}</div>
                           <div className="settings-sub">{t("settings.affinityEnableSub")}</div>
                         </div>
@@ -408,6 +406,13 @@ export function SettingsOverlay() {
                           }}
                           label={t("settings.affinityEnable")}
                         />
+                      </div>
+                      <div className="settings-row">
+                        <div>
+                          <div className="settings-label">{t("settings.affinityConnection")}</div>
+                          <div className="settings-sub">{affinityDetail}</div>
+                        </div>
+                        <span className={`affinity-dot ${affinityDot}`} aria-hidden />
                       </div>
                       <div className="settings-row">
                         <div>

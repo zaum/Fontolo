@@ -59,10 +59,6 @@ impl std::ops::Deref for ParseCache {
 }
 
 impl ParseCache {
-    fn get_mut(&mut self, path: &Path) -> Option<&mut CacheEntry> {
-        self.entries.get_mut(path)
-    }
-
     fn insert(&mut self, path: PathBuf, entry: CacheEntry) {
         self.insert_bounded(path, entry, CACHE_LIMIT, CACHE_BYTES);
     }
@@ -109,13 +105,6 @@ const CACHE_REVISION: u32 = 1;
 /// Admission limits for retained parsed metadata, not for the visible library.
 const CACHE_LIMIT: usize = 40_000;
 const CACHE_BYTES: usize = 256 * 1024 * 1024;
-
-/// Source of the [`CacheEntry::used`] counter.
-static USE_TICK: AtomicU64 = AtomicU64::new(1);
-
-fn next_tick() -> u64 {
-    USE_TICK.fetch_add(1, Ordering::Relaxed)
-}
 
 /// Set whenever the cache no longer matches what is on disk, so the writer can
 /// skip pointless writes when a rescan found nothing new.
@@ -207,10 +196,6 @@ fn load_disk_cache_once() {
                 CacheEntry {
                     len: entry.len,
                     mtime: entry.mtime_ns,
-                    // Loaded entries start out as the oldest, so the first
-                    // overflow drops the part this run has not touched yet
-                    // rather than the files it just read.
-                    used: next_tick(),
                     faces: entry.faces,
                 },
             );
@@ -466,13 +451,12 @@ fn cached_parse(path: &Path, source: FontSource) -> Vec<FontFace> {
     let mtime = mtime_ns(meta.as_ref());
     let key = path.to_path_buf();
 
-    if let Ok(mut cache) = parse_cache().lock() {
-        if let Some(entry) = cache.get_mut(&key) {
+    if let Ok(cache) = parse_cache().lock() {
+        if let Some(entry) = cache.get(&key) {
             if entry.len == len && entry.mtime == mtime {
                 // Cache hit: same bytes as last time. Re-apply `source`
                 // because it depends on the current library-dir setting.
                 let mut faces = entry.faces.clone();
-                entry.used = next_tick();
                 for f in &mut faces {
                     f.source = source;
                     f.deactivatable = crate::activation::can_deactivate(source);
@@ -489,7 +473,6 @@ fn cached_parse(path: &Path, source: FontSource) -> Vec<FontFace> {
             CacheEntry {
                 len,
                 mtime,
-                used: next_tick(),
                 faces: faces.clone(),
             },
         );
@@ -518,9 +501,11 @@ mod tests {
 
     impl TestDirectory {
         fn new() -> Self {
+            use std::sync::atomic::AtomicU64;
+            static TEST_DIRS: AtomicU64 = AtomicU64::new(0);
             let root = std::env::temp_dir();
             loop {
-                let path = root.join(format!("zfm-cache-test-{}-{}", std::process::id(), next_tick()));
+                let path = root.join(format!("zfm-cache-test-{}-{}", std::process::id(), TEST_DIRS.fetch_add(1, Ordering::Relaxed)));
                 match std::fs::create_dir(&path) {
                     Ok(()) => return Self(path),
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -584,7 +569,7 @@ mod tests {
                 let path = PathBuf::from(format!("fonts/{i}.ttf"));
                 if !cache.contains_key(&path) {
                     cache.insert(path, CacheEntry {
-                        len: 0, mtime: None, used: 0, faces: Vec::new(),
+                        len: 0, mtime: None, faces: Vec::new(),
                     });
                 }
             }
@@ -643,7 +628,6 @@ mod tests {
             CacheEntry {
                 len: 1024,
                 mtime: Some(1_700_000_000_000_000_000),
-                used: 1,
                 faces: vec![face(id)],
             },
         )

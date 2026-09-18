@@ -194,6 +194,26 @@ function buildBulkMenu(names: string[]): MenuItem[] {
   ];
 }
 
+export function buildTagMenu(familyName: string): MenuItem[] {
+  const s = useFontStore.getState();
+  return [
+    { kind: "heading", label: t("menu.tagAll") },
+    ...[...allTags(s.tags).keys()].map(
+      (tag): MenuItem => ({
+        kind: "check",
+        label: tag,
+        checked: (s.tags[familyName] ?? []).includes(tag),
+        action: () => void s.toggleTagForFamily(tag, familyName),
+      }),
+    ),
+    {
+      label: t("menu.newTag"),
+      icon: <Plus size={14} strokeWidth={1.5} />,
+      action: () => s.setBulkTagFor([familyName]),
+    },
+  ];
+}
+
 export function buildFamilyMenu(family: Family): MenuItem[] {
   const s = useFontStore.getState();
   const tags = allTags(s.tags);

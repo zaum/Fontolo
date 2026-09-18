@@ -6,6 +6,34 @@
 
 ---
 
+### <sup><sub style="font-size: 0.7em;">2026-09-18</sub></sup> · 🛠️ Maintenance · Affinity probe robustness, settings order, and reqwest TLS backend
+
+* Moved the Affinity enable toggle above the connection row so users can turn the integration on before reading its status.
+* Treated a reachable Affinity socket with an unreadable SDK preamble as a documentation problem instead of a lost connection, with a longer preamble read timeout and clearer error text.
+* Added a rustls TLS backend with the operating system's trust store so future HTTPS calls work on Linux, Windows, and macOS; the Affinity MCP socket itself stays plain HTTP on loopback.
+* Verified the Rust Affinity tests and backend type check on Windows; Linux and macOS runtime checks were not performed.
+
+`Uncommitted` · `working tree`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-17</sub></sup> · 🛠️ Maintenance · Remove Obsolete Scan Cache Usage Tracking
+
+* Removed the unused cache usage counter and its atomic updates after cache admission switched to retaining a stable subset of entries.
+* Made cache hits read-only and removed the unused mutable lookup helper and obsolete eviction comments.
+* Kept temporary-directory identifiers independent in tests, without restoring production usage tracking.
+* Verified all 15 Rust tests, all 5 Node tests, and the TypeScript/Vite production build on Windows.
+* Built the development executable and restarted it with the development server available; the new process opened a responsive ZFontManager window. Linux and macOS runtime checks were not performed.
+* Retained the 40,000-entry and estimated 256 MiB cache limits; the byte budget does not cap whole-application memory or transient deserialization allocations.
+* Kept single-writer atomic cache replacement. Serialization and file writing still hold the cache lock, so concurrent scans may wait; crash-left temporary files are not automatically deleted without a safe ownership criterion.
+* Left frontend bundle splitting and cache-lock redesign for measured follow-up work; no startup or scan timing improvement was claimed.
+* Excluded Affinity changes from this cleanup. This entry describes uncommitted work and does not increase the commit total above.
+
+`Uncommitted` · `working tree`
+
+---
+
+
 ### 2026-09-17 · 🎨 UI/UX · Preview Size Slider Polish & Larger Maximum
 
 * Shrunk the preview size slider thumb from 15 px to 12 px for a lighter toolbar feel.

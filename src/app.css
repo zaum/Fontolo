@@ -854,6 +854,25 @@
   border-color: color-mix(in srgb, var(--accent-a) 75%, transparent);
 }
 
+/* Grid view has no card chrome — just the name + large preview. */
+.grid-row .family-card {
+  background: none;
+  border-color: transparent;
+  border-radius: 0;
+}
+.grid-row .family-card:hover {
+  border-color: transparent;
+}
+.grid-row .family-card.card-selected,
+.grid-row .family-card.card-selected:hover {
+  background: none;
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--accent-a);
+}
+.grid-row .card-info-strip {
+  border-left-color: transparent;
+}
+
 .card-info-strip {
   position: absolute;
   top: 0;
@@ -952,6 +971,16 @@
   color: white;
   background: var(--accent-gradient);
   border: none;
+}
+.tag-label {
+  font-size: var(--fs-11);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  flex-shrink: 0;
 }
 
 .card-preview {

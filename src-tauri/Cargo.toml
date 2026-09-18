@@ -30,7 +30,11 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 thiserror = "2"
 notify = "7"
 rodio = { version = "0.19", default-features = false }
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream"] }
+# Keep a TLS backend even though the Affinity MCP socket is plain-HTTP
+# loopback: reqwest without any TLS feature fails any https:// request at
+# runtime, and rustls-platform-verifier uses the OS trust store on all three
+# platforms. Cross-platform by design (pure Rust, no system OpenSSL needed).
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream", "rustls"] }
 sysinfo = "0.38.4"
 tokio = { version = "1.53.1", features = ["time", "sync"] }
 

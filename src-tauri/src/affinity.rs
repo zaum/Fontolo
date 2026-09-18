@@ -31,6 +31,11 @@ const CANDIDATE_URLS: [&str; 3] = [
 const PROTOCOL_VERSIONS: [&str; 3] = ["2025-11-25", "2025-06-18", "2024-11-05"];
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(30);
+/// The `preamble` topic is not a local file: Affinity assembles it from its
+/// online hint pool, so reading it is a network round trip, not a loopback
+/// call. Give it the script timeout so a slow (or offline) network cannot cut
+/// off a read that would otherwise have finished.
+const PREAMBLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Read-only probe, verified live: open docs with the fonts they use.
 /// `isInstalled` marks fonts missing from the system (those need activation).
@@ -296,6 +301,19 @@ fn connect_error(detail: &str) -> String {
     }
 }
 
+/// A documentation failure is *not* a connection failure. The MCP socket is
+/// loopback, but Affinity serves the `preamble` topic from its online hint
+/// pool (`intelligence.seriflabs.com`), so a machine with no internet reaches
+/// Affinity and still cannot read it. Say which of the two happened, instead of
+/// telling the user Affinity is gone and sending them to the MCP toggle.
+fn docs_error(detail: &str) -> String {
+    format!(
+        "Affinity is reachable, but its SDK documentation (the 'preamble') could not be read: {detail} \
+The preamble comes from Affinity's online hint pool, so this needs an internet connection. \
+Fonts in open documents stay unmanaged until it succeeds; the check is retried automatically."
+    )
+}
+
 /// Pick the script-running tool and its script-text argument from tools/list.
 fn pick_script_tool(tools: &[serde_json::Value]) -> Result<(String, String), String> {
     let mut fallback: Option<(&serde_json::Value, String)> = None;
@@ -399,10 +417,25 @@ async fn call_tool(
     Ok(res)
 }
 
+/// Affinity answers a topic it cannot serve with `ERROR: …` as *text inside a
+/// successful result* — `isError` stays false — so the text is the only signal
+/// that the read did not happen.
+fn result_text_is_error(text: &str) -> bool {
+    text.trim_start().to_ascii_uppercase().starts_with("ERROR")
+}
+
 /// The server refuses `execute_script` until the preamble doc topic has been
 /// read in the current session ("The preamble documentation topic has not yet
 /// been read"). Do that first; if the docs tool is missing, try the script
 /// anyway.
+///
+/// Two traps here. Affinity reports a topic it cannot serve as `ERROR: …` *text
+/// inside a successful result* (`isError` stays false), so the text has to be
+/// checked as well — otherwise a failed read passes silently and only shows up
+/// later as a refusal from `execute_script`. And the preamble is assembled from
+/// Affinity's online hint pool, so this is the one step in the chain that a
+/// machine without internet cannot complete; its failures are reported through
+/// [`docs_error`] so an offline network is not mistaken for a missing Affinity.
 async fn read_preamble(session: &mut Session, tools: &[serde_json::Value]) -> Result<(), String> {
     let has_docs_tool = tools
         .iter()
@@ -410,14 +443,18 @@ async fn read_preamble(session: &mut Session, tools: &[serde_json::Value]) -> Re
     if !has_docs_tool {
         return Ok(());
     }
-    call_tool(
+    let res = call_tool(
         session,
         "read_sdk_documentation_topic",
         serde_json::json!({"filename": "preamble"}),
-        CONNECT_TIMEOUT,
+        PREAMBLE_TIMEOUT,
     )
     .await
-    .map_err(|e| format!("Affinity preamble read failed: {e}"))?;
+    .map_err(|e| docs_error(&e))?;
+    let text = result_text(&res);
+    if result_text_is_error(&text) {
+        return Err(docs_error(text.trim()));
+    }
     Ok(())
 }
 
@@ -463,17 +500,34 @@ pub async fn doc_fonts() -> Result<(Option<String>, Vec<AffinityDoc>), String> {
     Ok((version, docs))
 }
 
+/// Probe for the Settings panel: "is Affinity there?" is answered by the
+/// loopback session, and only the doc/script step below it can fail for reasons
+/// that have nothing to do with the connection — the `preamble` needs the
+/// internet. So a session that opens and initializes counts as reachable even
+/// when the query after it fails, and the failure is reported as `error` beside
+/// a live connection rather than as a lost one.
 pub async fn connection() -> AffinityConnection {
-    match doc_fonts().await {
-        Ok((version, docs)) => AffinityConnection {
+    let (mut session, version) = match open_any().await {
+        Ok(opened) => opened,
+        Err(e) => {
+            return AffinityConnection {
+                reachable: false,
+                version: None,
+                doc_count: 0,
+                error: Some(e),
+            }
+        }
+    };
+    match run_doc_fonts_script(&mut session).await {
+        Ok(docs) => AffinityConnection {
             reachable: true,
             version,
             doc_count: docs.len(),
             error: None,
         },
         Err(e) => AffinityConnection {
-            reachable: false,
-            version: None,
+            reachable: true,
+            version,
             doc_count: 0,
             error: Some(e),
         },
@@ -635,5 +689,36 @@ pub fn tick(app: &tauri::AppHandle) {
             }
             emit(app, "deactivated", Vec::new(), None);
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_doc_read_is_recognised_in_a_successful_result() {
+        // Verbatim from Affinity: a topic it cannot serve arrives as ERROR text
+        // inside an otherwise successful result, so `isError` says nothing.
+        assert!(result_text_is_error(
+            "ERROR: The preamble documentation topic has not yet been read."
+        ));
+        assert!(result_text_is_error("  error: network unreachable"));
+        assert!(result_text_is_error("  ERROR"));
+        assert!(!result_text_is_error(
+            "System preamble:\n\nThis is a JavaScript SDK for the Affinity by Canva application."
+        ));
+    }
+
+    #[test]
+    fn doc_failure_is_reported_as_a_doc_problem_not_a_lost_link() {
+        // An offline machine reaches Affinity (loopback socket) and still cannot
+        // read the preamble (online hint pool), so the two must not share a
+        // message: the connect wording sends the user to the MCP toggle.
+        let doc = docs_error("MCP 'tools/call' timed out");
+        assert!(doc.contains("Affinity is reachable"));
+        assert!(doc.contains("internet"));
+        let link = connect_error("timed out");
+        assert!(!link.contains("Affinity is reachable"));
+        assert_ne!(doc, link);
     }
 }
