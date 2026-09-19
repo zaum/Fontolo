@@ -180,9 +180,10 @@ async fn scan_all_faces(app: &tauri::AppHandle) -> Result<Vec<FontFace>, String>
 }
 
 /// Runs a full scan. Caller must hold [`scan_lock`], which keeps the library
-/// from being walked twice at once. Publishes the result in the cache and on
-/// the `fonts:ready` event, or the failure on `fonts:failed`. Always publishes
-/// something, even on failure, so coalesced waiters wake up either way.
+/// from being walked twice at once. Publishes the result in the shared cache;
+/// command callers receive that snapshot directly. Avoid also emitting the
+/// full library to the WebView because that duplicates a large serialized
+/// payload and the frontend no longer consumes the old `fonts:ready` event.
 async fn run_scan(app: &tauri::AppHandle) -> Result<FontSnapshot, String> {
     let out = match scan_all_faces(app).await {
         Ok(faces) => {
@@ -191,7 +192,6 @@ async fn run_scan(app: &tauri::AppHandle) -> Result<FontSnapshot, String> {
                 state.snapshot = Some(snap.clone());
                 state.error = None;
             }
-            let _ = app.emit("fonts:ready", &snap);
             Ok(snap)
         }
         Err(e) => {

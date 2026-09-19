@@ -436,8 +436,23 @@ export const useFontStore = create<FontStore>((set, get) => ({
   init: async () => {
     if (initStarted) return;
     initStarted = true;
+    let pendingScanProgress: ScanProgress | null = null;
+    let scanProgressTimer: ReturnType<typeof setTimeout> | undefined;
     await listen<ScanProgress>("scan:progress", (e) => {
-      set({ scanProgress: e.payload });
+      pendingScanProgress = e.payload;
+      if (e.payload.total > 0 && e.payload.done >= e.payload.total) {
+        clearTimeout(scanProgressTimer);
+        scanProgressTimer = undefined;
+        set({ scanProgress: e.payload });
+        pendingScanProgress = null;
+        return;
+      }
+      if (scanProgressTimer !== undefined) return;
+      scanProgressTimer = setTimeout(() => {
+        scanProgressTimer = undefined;
+        if (pendingScanProgress) set({ scanProgress: pendingScanProgress });
+        pendingScanProgress = null;
+      }, 250);
     });
     await listen<GoogleFontsProgress>("google-fonts:progress", (e) => {
       // A catalogue refresh downloads no font files, so a finished refresh is
@@ -590,10 +605,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
       if (finished) {
         applyLibrary(set, get, { fonts: finished, ...metadata });
         if (get().settings.googleFontsEnabled) {
-          // The catalogue is instant (a local JSON file); the refresh that
-          // follows is a single request looking for new families. No font file
-          // is downloaded at startup.
-          void get().loadGoogleCatalog().then(() => get().refreshGoogleCatalog());
+          // Load the local catalogue without starting a network refresh during
+          // startup. Refreshing also rewrites tags for every catalogue family,
+          // which can block the WebView while the library is becoming usable.
+          void get().loadGoogleCatalog();
           void get().refreshGoogleCacheSize();
         }
         return;
@@ -609,8 +624,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
         favorites: get().favorites, notes: get().notes, trash: get().trash,
       });
       if (get().settings.googleFontsEnabled) {
-        // Same as above: catalogue from disk, then one background refresh.
-        void get().loadGoogleCatalog().then(() => get().refreshGoogleCatalog());
+        // Keep startup responsive; the user can refresh the catalogue from
+        // Settings after the library is ready.
+        void get().loadGoogleCatalog();
         void get().refreshGoogleCacheSize();
       }
     } catch (e) {
@@ -2104,4 +2120,3 @@ export function allFoundryCounts(fonts: FontFace[], tags: Record<string, string[
   }
   return new Map([...m.entries()].sort((a, b) => a[0].localeCompare(b[0])));
 }
-

@@ -477,14 +477,29 @@ pub fn decorate_faces(faces: &mut [FontFace]) {
         .iter()
         .map(|family| (family.family.as_str(), family))
         .collect();
+    let postscript_metadata: HashMap<String, &GoogleFontFamily> = catalog
+        .family_metadata_list
+        .iter()
+        .filter_map(|family| {
+            let key = family
+                .family
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            (!key.is_empty()).then_some((key, family))
+        })
+        .collect();
     for face in faces.iter_mut().filter(|face| face.source == FontSource::Google) {
         let family = metadata.get(face.family.as_str()).copied().or_else(|| {
             let postscript = face.postscript_name.as_deref()?;
             let stem = postscript.split('-').next()?;
-            catalog
-                .family_metadata_list
-                .iter()
-                .find(|family| family.family.eq_ignore_ascii_case(stem))
+            let key = stem
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            postscript_metadata.get(&key).copied()
         });
         let Some(family) = family else { continue };
         face.family = family.family.clone();

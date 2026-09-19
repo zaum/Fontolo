@@ -429,22 +429,78 @@ pub fn scan_all(app: &tauri::AppHandle, extra: &[String], managed: &Path) -> Vec
         std::collections::HashSet::with_capacity(total);
     let mut families_seen = std::collections::HashSet::new();
     let mut faces = Vec::with_capacity(total);
-    for (done, (path, base_source)) in files.into_iter().enumerate() {
-        seen.insert(path.clone());
-        let source = classify(&path, base_source, managed);
-        let parsed = cached_parse(&path, source);
-        families_seen.extend(parsed.iter().map(|face| face.family.clone()));
-        faces.extend(parsed);
-        if done % 10 == 0 || done + 1 == total {
-            let _ = app.emit(
-                "scan:progress",
-                ScanProgress {
-                    done: done + 1,
-                    total,
-                    families: families_seen.len(),
-                },
-            );
+
+    // A cold parse is CPU-heavy, while a warm scan mostly waits for one file
+    // metadata call per cached path. The latter needs more in-flight I/O than
+    // there are CPU cores (especially on removable/exFAT library drives), but
+    // oversubscribing a real parse would only add contention. Select the pool
+    // size from cache coverage so both cases stay fast.
+    let cached_files = parse_cache()
+        .lock()
+        .map(|cache| files.iter().filter(|(path, _)| cache.contains_key(path)).count())
+        .unwrap_or(0);
+    let parallelism = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let mostly_cached = total > 0 && cached_files.saturating_mul(4) >= total.saturating_mul(3);
+    let worker_count = if mostly_cached {
+        parallelism.saturating_mul(4).clamp(8, 32)
+    } else {
+        parallelism.min(8)
+    }
+    .min(total.max(1));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, PathBuf, Vec<FontFace>)>();
+    let mut parsed_files: Vec<Option<(PathBuf, Vec<FontFace>)>> =
+        (0..total).map(|_| None).collect();
+
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let tx = tx.clone();
+            let next = &next;
+            let files = &files;
+            scope.spawn(move || loop {
+                let index = next.fetch_add(1, Ordering::Relaxed);
+                let Some((path, base_source)) = files.get(index) else {
+                    break;
+                };
+                let source = classify(path, *base_source, managed);
+                let parsed = cached_parse(path, source);
+                if tx.send((index, path.clone(), parsed)).is_err() {
+                    break;
+                }
+            });
         }
+        drop(tx);
+
+        let mut last_progress = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(1))
+            .unwrap_or_else(std::time::Instant::now);
+        for (done, (index, path, parsed)) in rx.into_iter().enumerate() {
+            families_seen.extend(parsed.iter().map(|face| face.family.clone()));
+            parsed_files[index] = Some((path, parsed));
+            // Keep the UI responsive without queuing hundreds of tiny WebView
+            // events per second when a warm scan runs at full I/O throughput.
+            if last_progress.elapsed() >= std::time::Duration::from_millis(250)
+                || done + 1 == total
+            {
+                let _ = app.emit(
+                    "scan:progress",
+                    ScanProgress {
+                        done: done + 1,
+                        total,
+                        families: families_seen.len(),
+                    },
+                );
+                last_progress = std::time::Instant::now();
+            }
+        }
+    });
+
+    for parsed in parsed_files.into_iter().flatten() {
+        let (path, parsed) = parsed;
+        seen.insert(path);
+        faces.extend(parsed);
     }
     prune_cache(&seen);
 

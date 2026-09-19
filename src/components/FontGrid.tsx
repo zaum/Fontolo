@@ -16,7 +16,9 @@ export function FontGrid({ families }: { families: Family[] }) {
     count: families.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => estimate,
-    overscan: 6,
+    // Two rows keep scrolling smooth without mounting a second screenful of
+    // cards and starting preview work the user cannot see yet.
+    overscan: 2,
     getItemKey: (i) => families[i].name,
   });
 

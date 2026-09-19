@@ -66,6 +66,18 @@ function categoryTitleKey(id: SettingsCategoryId): TKey {
   }
 }
 
+function ScanProgressText() {
+  const t = useT();
+  const progress = useFontStore((s) => s.scanProgress);
+  return (
+    <>
+      {progress.total > 0
+        ? t("scan.reading", { done: progress.done, total: progress.total })
+        : t("settings.scanningFolders")}
+    </>
+  );
+}
+
 export function SettingsOverlay() {
   const t = useT();
   const openState = useFontStore((s) => s.settingsOpen);
@@ -84,7 +96,6 @@ export function SettingsOverlay() {
   const setAccent = useFontStore((s) => s.setAccent);
   const scanning = useFontStore((s) => s.phase === "scanning");
   const googleFontsProgress = useFontStore((s) => s.googleFontsProgress);
-  const scanProgress = useFontStore((s) => s.scanProgress);
   const trapRef = useFocusTrap<HTMLDivElement>(openState);
   const [defaultLibDir, setDefaultLibDir] = useState("");
   const affinityConnection = useFontStore((s) => s.affinityConnection);
@@ -329,9 +340,7 @@ export function SettingsOverlay() {
                           {scanning && (
                             <div className="settings-scanning tabular" role="status" aria-live="polite">
                               <LoaderCircle size={13} strokeWidth={1.5} className="settings-scanning-icon" />
-                              {scanProgress.total > 0
-                                ? t("scan.reading", { done: scanProgress.done, total: scanProgress.total })
-                                : t("settings.scanningFolders")}
+                              <ScanProgressText />
                             </div>
                           )}
                         </div>

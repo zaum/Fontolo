@@ -33,7 +33,7 @@ function NavRow({
   onPick: (e: React.MouseEvent) => void;
   icon: React.ReactNode;
   label: string;
-  count?: number;
+  count?: React.ReactNode;
   index: number;
   onContextMenu?: (e: React.MouseEvent) => void;
   /** The row belongs to the currently selected family (accent-tinted). */
@@ -93,6 +93,11 @@ function SectionReset({ show, label, onReset }: { show: boolean; label: string; 
       <RotateCcw size={12} strokeWidth={2} />
     </motion.button>
   );
+}
+
+function ScannedFamilyCount() {
+  const count = useFontStore((s) => s.scanProgress.families);
+  return <>{count}</>;
 }
 
 function NewCollectionInput({ onDone }: { onDone: () => void }) {
@@ -179,7 +184,6 @@ export function Sidebar() {
   const trash = useFontStore((s) => s.trash);
   const googleCatalog = useFontStore((s) => s.googleCatalog);
   const googleFontsProgress = useFontStore((s) => s.googleFontsProgress);
-  const scanProgress = useFontStore((s) => s.scanProgress);
   const scanning = useFontStore((s) => s.phase === "scanning");
   const deleteCollection = useFontStore((s) => s.deleteCollection);
   const renameCollection = useFontStore((s) => s.renameCollection);
@@ -493,7 +497,7 @@ export function Sidebar() {
           onPick={() => pickBrowse("library")}
           icon={<Library size={15} strokeWidth={1.5} />}
           label={t("side.library")}
-          count={scanning ? scanProgress.families : familyCount}
+          count={scanning ? <ScannedFamilyCount /> : familyCount}
           index={i++}
           pulsing={scanning}
         />

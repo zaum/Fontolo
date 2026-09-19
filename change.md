@@ -1,8 +1,23 @@
 # Fontolo — Changelog
 
-* **Total commits:** 1
+* **Total commits:** 2
 * **Date range:** 2026-09-19 – 2026-09-19
-* **Environment / Context:** UI navigation refactor & shortcuts relocation
+* **Environment / Context:** Main branch maintenance and scan performance fix
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-19</sub></sup> · 🐛 Fixes · Prevent Large Library Scan Slowdowns
+* Indexed Google Fonts family fallback metadata so scan decoration no longer searches the entire catalogue for every Google font.
+* Parallelized bounded font parsing workers while preserving deterministic result ordering, cache reuse, and scan progress reporting.
+* Adapted scan concurrency to cache coverage: warm rescans now use a larger I/O pool while cold parsing remains CPU-bounded, and progress events are throttled to protect the WebView.
+* Isolated scan counters from the full sidebar and settings trees and coalesced frontend progress updates, preventing high WebView CPU usage during long scans.
+* Deferred local and Google preview font loading until the library scan is ready, keeping preview I/O off the scan's critical path.
+* Stopped the automatic Google catalogue refresh during startup so metadata/tag updates cannot block the interface; refresh remains available from Settings.
+* Aligned a 16-family browser preview cache with reduced grid overscan, loaded up to four safe previews concurrently after the first paint, and prevented evicted in-flight loads from re-registering themselves during fast scrolling.
+* Prevented Chromium from automatically decoding full local font files larger than 8 MB unless a dedicated preview asset is available, avoiding multi-hundred-megabyte CJK and variable-font expansions.
+* Removed the unused full-library ready event so startup no longer serializes and sends the same large font snapshot to the WebView twice.
+
+`Direct Commit` · `pending`
 
 ---
 

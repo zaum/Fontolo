@@ -22,6 +22,7 @@ import { Toaster } from "./design/primitives/Toast";
 import { spring } from "./design/springs";
 import { familiesFor, selectGoogleFamily, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
 import { useT } from "./lib/i18n";
+import { setFontPreviewEnabled } from "./lib/fontLoader";
 
 // Live scan readout: a spinning loader plus the "reading N of M" counter. Used
 // at the bottom of the first-run skeleton and, pinned above the content, while
@@ -188,12 +189,17 @@ function MainContent() {
 export default function App() {
   const init = useFontStore((s) => s.init);
   const motionPref = useFontStore((s) => s.motionPref);
+  const scanReady = useFontStore((s) => s.phase === "ready");
 
   useEffect(() => {
     void init();
 
     void getCurrentWindow().show();
   }, [init]);
+
+  useEffect(() => {
+    setFontPreviewEnabled(scanReady);
+  }, [scanReady]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
