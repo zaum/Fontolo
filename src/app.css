@@ -2651,6 +2651,9 @@
   font-size: var(--fs-11);
   color: var(--text-tertiary);
 }
+.waterfall-toggle {
+  margin-left: auto;
+}
 .waterfall-full-line {
   display: flex;
   align-items: baseline;
@@ -3477,7 +3480,19 @@
 .settings-data-btn:active {
   transform: scale(0.97);
 }
-
+/* Clickable full-width path: shows where activated fonts live. */
+.settings-path-btn {
+  width: 100%;
+  margin-top: 6px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: var(--fs-11);
+  font-weight: 400;
+}
+.settings-path-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .settings-footer {
   font-size: var(--fs-10);
   color: var(--text-tertiary);

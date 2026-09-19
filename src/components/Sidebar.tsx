@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, GripVertical, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2, Globe2 } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, GripVertical, History, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Settings, Sparkles, Star, Tag, Trash2, Globe2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
@@ -25,6 +25,7 @@ function NavRow({
   related,
   pulsing,
   rowRef,
+  dataTour,
 }: {
   active: boolean;
   lead: boolean;
@@ -40,10 +41,12 @@ function NavRow({
   pulsing?: boolean;
   /** Ref sink so the sidebar can scroll the row into view. */
   rowRef?: (el: HTMLElement | null) => void;
+  dataTour?: string;
 }) {
   return (
     <motion.button
       ref={rowRef}
+      data-tour={dataTour}
       data-family-row={related ? label : undefined}
       className={`nav-row ${active ? "nav-active" : ""} ${related ? "nav-related" : ""} ${pulsing ? "nav-sync-pulse" : ""}`}
       onClick={onPick}
@@ -250,6 +253,7 @@ export function Sidebar() {
   const setBrowse = useFontStore((s) => s.setBrowse);
   const setFilterSel = useFontStore((s) => s.setFilterSel);
   const setArea = useFontStore((s) => s.setArea);
+  const setSettingsOpen = useFontStore((s) => s.setSettingsOpen);
   const sidebarWidth = useFontStore((s) => s.sidebarWidth);
   const setSidebarWidth = useFontStore((s) => s.setSidebarWidth);
 
@@ -789,29 +793,15 @@ export function Sidebar() {
           index={i++}
         />
         <NavRow
-          active={area === "about"}
+          active={false}
           lead
           pillId="nav-pill-footer"
-          onPick={() => setArea("about")}
-          icon={<Info size={15} strokeWidth={1.5} />}
-          label={t("side.about")}
+          onPick={() => setSettingsOpen(true)}
+          icon={<Settings size={15} strokeWidth={1.5} />}
+          label={t("side.settings")}
           index={i++}
+          dataTour="settings"
         />
-
-        <motion.button
-          className="nav-row"
-          onClick={() => useFontStore.getState().setHelpOpen(true)}
-          initial={{ opacity: 0, x: -12 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ ...springSoft, delay: staggerDelay(i++) }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <span className="nav-icon">
-            <Keyboard size={15} strokeWidth={1.5} />
-          </span>
-          <span className="nav-label">{t("side.shortcuts")}</span>
-          <kbd className="kbd nav-kbd">?</kbd>
-        </motion.button>
       </div>
     </motion.aside>
   );

@@ -83,7 +83,6 @@ export type SortMode = "name" | "styles" | "size";
 export type Nav =
   | { kind: "library" }
   | { kind: "trash" }
-  | { kind: "about" }
   | { kind: "tag"; tag: string }
   | { kind: "collection"; name: string }
   | { kind: "foundry"; foundry: string }
@@ -111,7 +110,15 @@ export type BrowseKind =
   | "system"
   | "googleFonts";
 
-export type AreaKind = "main" | "trash" | "about";
+export type AreaKind = "main" | "trash";
+
+export type SettingsCategoryId =
+  | "language"
+  | "library"
+  | "googleFonts"
+  | "autoActivation"
+  | "appearance"
+  | "shortcuts";
 
 export interface Family {
   name: string;
@@ -181,7 +188,7 @@ interface FontStore {
 
   comparePicking: boolean;
   settingsOpen: boolean;
-  helpOpen: boolean;
+  settingsCategory: SettingsCategoryId;
   paletteOpen: boolean;
   settings: AppSettings;
   affinityConnection: AffinityConnection | null;
@@ -255,8 +262,8 @@ interface FontStore {
   togglePick: (family: string) => void;
   setAllExpanded: (open: boolean) => void;
   setAccent: (hex: string) => void;
-  setSettingsOpen: (open: boolean) => void;
-  setHelpOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean, category?: SettingsCategoryId) => void;
+  setSettingsCategory: (category: SettingsCategoryId) => void;
   setPaletteOpen: (open: boolean) => void;
   updateSettings: (settings: AppSettings) => Promise<void>;
   refreshAffinityConnection: () => Promise<void>;
@@ -391,7 +398,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   compare: null,
   comparePicking: false,
   settingsOpen: false,
-  helpOpen: false,
+  settingsCategory: "language",
   paletteOpen: false,
   settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true },
   affinityConnection: null,
@@ -1298,8 +1305,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
         ? s.selection.filter((f) => f !== family)
         : [...s.selection, family],
     })),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  setHelpOpen: (helpOpen) => set({ helpOpen }),
+  setSettingsOpen: (settingsOpen, category) =>
+    set({
+      settingsOpen,
+      ...(settingsOpen && category ? { settingsCategory: category } : {}),
+    }),
+  setSettingsCategory: (settingsCategory) => set({ settingsCategory }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
   updateSettings: async (settings) => {
@@ -1542,10 +1553,6 @@ export const useFontStore = create<FontStore>((set, get) => ({
       set({ area: "trash", selectedFamily: null, selection: [] });
       return;
     }
-    if (nav.kind === "about") {
-      set({ area: "about", selectedFamily: null, selection: [] });
-      return;
-    }
     if (nav.kind === "tag") {
       set({
         area: "main",
@@ -1721,6 +1728,19 @@ function virtualGoogleFace(family: string, style: GoogleStyle): FontFace {
  * the library is shown as the library family itself, so its styles stay the
  * real, toggleable ones; every other entry is preview only.
  */
+export function selectGoogleFamily(
+  s: Pick<
+    FontStore,
+    "fonts" | "tags" | "googleCatalog" | "googleMeta"
+  >,
+  name: string,
+): Family | undefined {
+  if (s.googleCatalog.length === 0) return undefined;
+  const found = s.googleCatalog.find((entry) => entry.family === name);
+  if (!found) return undefined;
+  const [built] = buildGoogleFamilies([found], s.googleMeta, familiesFor(s.fonts, s.tags), s.tags);
+  return built;
+}
 export function buildGoogleFamilies(
   catalog: GoogleFamily[],
   meta: Record<string, GoogleFamilyInfo | undefined>,

@@ -1,6 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Settings, Square, X } from "lucide-react";
-import { useFontStore } from "../state/fontStore";
+import { Minus, Square, X } from "lucide-react";
 import { motion } from "motion/react";
 import { springSoft } from "../design/springs";
 import { useT } from "../lib/i18n";
@@ -8,7 +7,6 @@ import { useT } from "../lib/i18n";
 export function Titlebar() {
   const t = useT();
   const win = getCurrentWindow();
-  const setSettingsOpen = useFontStore((s) => s.setSettingsOpen);
   return (
     <motion.div
       className="titlebar"
@@ -24,14 +22,6 @@ export function Titlebar() {
         </span>
       </div>
       <div className="titlebar-controls">
-        <button
-          data-tour="settings"
-          aria-label={t("titlebar.settings")}
-          onClick={() => setSettingsOpen(true)}
-        >
-          <Settings size={15} strokeWidth={1.5} />
-        </button>
-        <span className="titlebar-sep" />
         <button aria-label={t("titlebar.minimize")} onClick={() => void win.minimize()}>
           <Minus size={13} strokeWidth={1.5} />
         </button>

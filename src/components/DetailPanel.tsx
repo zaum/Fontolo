@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
 import { useFontCss, formatBytes, pathBasename } from "../lib/fontLoader";
-import { familiesFor, conflictsFor, googlePreviewKey, isGoogleVirtualFace, resolveSampleText, useFontStore } from "../state/fontStore";
+import { familiesFor, conflictsFor, googlePreviewKey, isGoogleVirtualFace, resolveSampleText, selectGoogleFamily, useFontStore } from "../state/fontStore";
 import { useGoogleCss } from "../lib/googlePreview";
 import { ipc, type FontFace, type VariationAxis } from "../lib/ipc";
 import { toast } from "../design/primitives/Toast";
@@ -540,6 +540,8 @@ export function DetailPanel() {
   const selectedFamily = useFontStore((s) => s.selectedFamily);
   const fonts = useFontStore((s) => s.fonts);
   const tags = useFontStore((s) => s.tags);
+  const googleCatalog = useFontStore((s) => s.googleCatalog);
+  const googleMeta = useFontStore((s) => s.googleMeta);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const uninstallFamily = useFontStore((s) => s.uninstallFamily);
   const sampleText = useFontStore((s) => s.sampleText);
@@ -568,7 +570,9 @@ export function DetailPanel() {
   );
 
   const family = selectedFamily
-    ? familiesFor(fonts, tags).get(selectedFamily) ?? null
+    ? selectGoogleFamily({ fonts, tags, googleCatalog, googleMeta }, selectedFamily) ??
+      familiesFor(fonts, tags).get(selectedFamily) ??
+      null
     : null;
 
   const [styleId, setStyleId] = useState<string | null>(null);

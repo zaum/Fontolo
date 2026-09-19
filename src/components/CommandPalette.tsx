@@ -4,7 +4,6 @@ import {
   Command,
   FolderOpen,
   History,
-  Info,
   Keyboard,
   Languages,
   LayoutGrid,
@@ -126,12 +125,6 @@ export function CommandPalette() {
         icon: <Trash2 size={14} strokeWidth={1.5} />,
         run: () => s.setNav({ kind: "trash" }),
       },
-      {
-        id: "nav-about",
-        label: t("palette.about"),
-        icon: <Info size={14} strokeWidth={1.5} />,
-        run: () => s.setNav({ kind: "about" }),
-      },
       ...Object.keys(s.collections)
         .sort((a, b) => a.localeCompare(b))
         .map(
@@ -214,7 +207,7 @@ export function CommandPalette() {
         id: "shortcuts",
         label: t("palette.shortcuts"),
         icon: <Keyboard size={14} strokeWidth={1.5} />,
-        run: () => s.setHelpOpen(true),
+        run: () => s.setSettingsOpen(true, "shortcuts"),
       },
     ].map((c) => ({ ...c, run: () => (close(), c.run()) }));
 

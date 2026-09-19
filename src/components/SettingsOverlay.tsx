@@ -18,6 +18,7 @@ import {
   X,
   Globe2,
   RefreshCw,
+  Keyboard,
 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
@@ -32,12 +33,12 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import { useT } from "../lib/i18n";
 import type { TKey } from "../lib/i18n";
 import { LanguageSelect } from "./LanguageSelect";
+import { ShortcutsContent } from "./ShortcutsContent";
 import { APP_LICENSE, APP_VERSION } from "../lib/version";
+import type { SettingsCategoryId } from "../state/fontStore";
 
 const REQUEST_LANGUAGE_URL =
   "https://github.com/zaum/fontolo/issues/new?title=Language%20request%3A%20";
-
-type SettingsCategoryId = "language" | "library" | "googleFonts" | "autoActivation" | "appearance";
 
 const CATEGORIES: { id: SettingsCategoryId; icon: typeof Languages }[] = [
   { id: "language", icon: Languages },
@@ -45,6 +46,7 @@ const CATEGORIES: { id: SettingsCategoryId; icon: typeof Languages }[] = [
   { id: "googleFonts", icon: Globe2 },
   { id: "autoActivation", icon: Link2 },
   { id: "appearance", icon: Palette },
+  { id: "shortcuts", icon: Keyboard },
 ];
 
 function categoryTitleKey(id: SettingsCategoryId): TKey {
@@ -59,6 +61,8 @@ function categoryTitleKey(id: SettingsCategoryId): TKey {
       return "settings.autoActivation";
     case "appearance":
       return "settings.appearance";
+    case "shortcuts":
+      return "settings.shortcuts";
   }
 }
 
@@ -66,6 +70,8 @@ export function SettingsOverlay() {
   const t = useT();
   const openState = useFontStore((s) => s.settingsOpen);
   const setSettingsOpen = useFontStore((s) => s.setSettingsOpen);
+  const activeCategory = useFontStore((s) => s.settingsCategory);
+  const setSettingsCategory = useFontStore((s) => s.setSettingsCategory);
   const settings = useFontStore((s) => s.settings);
   const updateSettings = useFontStore((s) => s.updateSettings);
   const motionPref = useFontStore((s) => s.motionPref);
@@ -81,13 +87,18 @@ export function SettingsOverlay() {
   const scanProgress = useFontStore((s) => s.scanProgress);
   const trapRef = useFocusTrap<HTMLDivElement>(openState);
   const [defaultLibDir, setDefaultLibDir] = useState("");
-  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>("language");
   const affinityConnection = useFontStore((s) => s.affinityConnection);
   const refreshAffinityConnection = useFontStore((s) => s.refreshAffinityConnection);
 
   const googleCacheBytes = useFontStore((s) => s.googleCacheBytes);
   const refreshGoogleCacheSize = useFontStore((s) => s.refreshGoogleCacheSize);
   const clearGoogleCache = useFontStore((s) => s.clearGoogleCache);
+  const [googleInstallDir, setGoogleInstallDir] = useState("");
+
+  useEffect(() => {
+    if (!openState) return;
+    void ipc.defaultLibraryDir().then(setGoogleInstallDir).catch(() => {});
+  }, [openState]);
 
   // Metadata only: a refresh checks the catalogue for new families, it does not
   // download a single font file.
@@ -212,7 +223,7 @@ export function SettingsOverlay() {
                       key={id}
                       className={`settings-nav-btn ${activeCategory === id ? "settings-nav-btn-active" : ""}`}
                       aria-current={activeCategory === id ? "true" : undefined}
-                      onClick={() => setActiveCategory(id)}
+                      onClick={() => setSettingsCategory(id)}
                     >
                       <Icon size={14} strokeWidth={1.5} />
                       <span>{t(categoryTitleKey(id))}</span>
@@ -446,6 +457,22 @@ export function SettingsOverlay() {
                           {t("settings.googleFontsCacheClear")}
                         </button>
                       </div>
+                      <div className="settings-row">
+                        <div>
+                          <div className="settings-label">{t("settings.googleFontsLocation")}</div>
+                          <div className="settings-sub">{t("settings.googleFontsLocationSub")}</div>
+                          <button
+                            className="settings-path-btn settings-data-btn"
+                            title={googleInstallDir || t("settings.googleFontsLocationEmpty")}
+                            onClick={() => {
+                              if (googleInstallDir) void revealItemInDir(googleInstallDir).catch(() => {});
+                            }}
+                          >
+                            <FolderOpen size={13} strokeWidth={1.5} />
+                            <span>{googleInstallDir || "…"}</span>
+                          </button>
+                        </div>
+                      </div>
                     </section>
                   )}
 
@@ -601,6 +628,13 @@ export function SettingsOverlay() {
                           ))}
                         </div>
                       </div>
+                    </section>
+                  )}
+
+                  {activeCategory === "shortcuts" && (
+                    <section className="settings-section">
+                      <div className="detail-heading">{t("settings.shortcuts")}</div>
+                      <ShortcutsContent />
                     </section>
                   )}
                 </div>

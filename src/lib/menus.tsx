@@ -225,8 +225,7 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
     a.localeCompare(b),
   );
   const canUninstall = family.faces.some((f) => f.source !== "system" && !isGoogleVirtualFace(f));
-  // A catalogue family has no file yet: nothing to export, copy or reveal.
-  const hasFiles = family.faces.some((f) => !isGoogleVirtualFace(f));
+  const virtualOnly = family.faces.length > 0 && family.faces.every((f) => isGoogleVirtualFace(f));
 
   const favorite = s.favorites.includes(family.name);
   const items: MenuItem[] = [
@@ -287,8 +286,9 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
       action: () => useFontStore.setState({ pendingCollectionFor: family.name }),
     },
     { kind: "separator" },
-    ...(hasFiles
-      ? [
+    ...(virtualOnly
+      ? []
+      : [
           {
             label: t("menu.exportFamily"),
             icon: <Download size={14} strokeWidth={1.5} />,
@@ -307,8 +307,7 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
                 toast.error(t("toast.couldntOpenFileManager"), String(e)),
               ),
           } satisfies MenuItem,
-        ]
-      : []),
+        ]),
     {
       label: t("menu.exportSpecimen"),
       icon: <ImageIcon size={14} strokeWidth={1.5} />,

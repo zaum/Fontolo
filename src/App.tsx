@@ -9,11 +9,9 @@ import { FontGrid } from "./components/FontGrid";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { TrashView } from "./components/TrashView";
-import { AboutView } from "./components/AboutView";
 import { WaterfallView } from "./components/WaterfallView";
 import { CompareOverlay } from "./components/CompareOverlay";
 import { SettingsOverlay } from "./components/SettingsOverlay";
-import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { CommandPalette } from "./components/CommandPalette";
 import { BulkTagPrompt } from "./components/BulkTagPrompt";
 import { DuplicateDialog } from "./components/DuplicateDialog";
@@ -22,7 +20,7 @@ import { ContextMenuHost, openContextMenuAt } from "./design/primitives/ContextM
 import { buildFamilyMenu } from "./lib/menus";
 import { Toaster } from "./design/primitives/Toast";
 import { spring } from "./design/springs";
-import { familiesFor, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
+import { familiesFor, selectGoogleFamily, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
 import { useT } from "./lib/i18n";
 
 // Live scan readout: a spinning loader plus the "reading N of M" counter. Used
@@ -164,7 +162,6 @@ function MainContent() {
   }, [visibleOrder]);
 
   if (area === "trash") return <TrashView />;
-  if (area === "about") return <AboutView />;
   // Only blank the content area while there is nothing to show yet (first run).
   // Refreshes — the file watcher, or the manual rescan button — now happen in
   // the background: the current library stays on screen and the fresh data is
@@ -214,7 +211,11 @@ export default function App() {
       if (e.key === "?" && !inField) {
         e.preventDefault();
         const st = useFontStore.getState();
-        st.setHelpOpen(!st.helpOpen);
+        if (st.settingsOpen && st.settingsCategory === "shortcuts") {
+          st.setSettingsOpen(false);
+        } else {
+          st.setSettingsOpen(true, "shortcuts");
+        }
       }
 
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -226,7 +227,7 @@ export default function App() {
       const arrows = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"];
       if (arrows.includes(e.key) && !inField) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen) return;
+        if (st.compare || st.settingsOpen) return;
         const order = st.visibleOrder;
         if (order.length === 0) return;
         e.preventDefault();
@@ -245,9 +246,9 @@ export default function App() {
         const st = useFontStore.getState();
         const target =
           st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
-        if (st.compare || st.settingsOpen || st.helpOpen || !target) return;
+        if (st.compare || st.settingsOpen || !target) return;
         e.preventDefault();
-        const fam = familiesFor(st.fonts, st.tags).get(target);
+        const fam = selectGoogleFamily(st, target) ?? familiesFor(st.fonts, st.tags).get(target);
         if (fam?.deactivatable) {
           void st.setFamilyActive(fam.name, !fam.active);
         }
@@ -255,7 +256,7 @@ export default function App() {
 
       if ((e.key === "a" || e.key === "A") && !inField && (e.ctrlKey || e.metaKey)) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen || st.paletteOpen) return;
+        if (st.compare || st.settingsOpen || st.paletteOpen) return;
         if (st.viewMode !== "grid") return;
         if (st.visibleOrder.length === 0) return;
         e.preventDefault();
@@ -264,7 +265,7 @@ export default function App() {
 
       if ((e.key === "c" || e.key === "C") && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen || st.selection.length < 2) return;
+        if (st.compare || st.settingsOpen || st.selection.length < 2) return;
         e.preventDefault();
         st.openCompare(st.selection);
       }
@@ -273,13 +274,13 @@ export default function App() {
         const st = useFontStore.getState();
         const target =
           st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
-        if (st.compare || st.settingsOpen || st.helpOpen || !target) return;
+        if (st.compare || st.settingsOpen || !target) return;
         e.preventDefault();
         void st.toggleFavorite(target);
       }
       if (e.key === "Delete" && !inField) {
         const st = useFontStore.getState();
-        if (st.compare || st.settingsOpen || st.helpOpen) return;
+        if (st.compare || st.settingsOpen) return;
         const doomed = st.selection.length > 0
           ? st.selection
           : st.selectedFamily ? [st.selectedFamily] : [];
@@ -292,9 +293,9 @@ export default function App() {
         const st = useFontStore.getState();
         const target =
           st.selection.length === 1 ? st.selection[0] : st.selectedFamily;
-        if (inField || st.compare || st.settingsOpen || st.helpOpen || !target) return;
+        if (inField || st.compare || st.settingsOpen || !target) return;
         e.preventDefault();
-        const fam = familiesFor(st.fonts, st.tags).get(target);
+        const fam = selectGoogleFamily(st, target) ?? familiesFor(st.fonts, st.tags).get(target);
         if (!fam) return;
         const card = document.querySelector(`[data-family="${CSS.escape(fam.name)}"]`);
         const r = card?.getBoundingClientRect();
@@ -327,7 +328,6 @@ export default function App() {
       <DropZone />
       <CompareOverlay />
       <SettingsOverlay />
-      <ShortcutsOverlay />
       <CommandPalette />
       <BulkTagPrompt />
       <Onboarding />
