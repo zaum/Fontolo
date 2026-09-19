@@ -1255,7 +1255,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   exportLibraryData: async (dest) => {
     const { tags, collections, favorites, notes } = get();
     const payload = {
-      app: "ZFontManager",
+      app: "Fontolo",
       version: 1,
       exportedAt: new Date().toISOString(),
       tags,
@@ -1281,7 +1281,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         favorites: string[];
         notes: Record<string, string>;
       }>;
-      if (d?.app !== "ZFontManager") {
+      if (d?.app !== "Fontolo") {
         toast.error(t("toast.notAnExport"), t("toast.notAnExportSub"));
         return;
       }

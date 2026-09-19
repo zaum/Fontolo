@@ -173,7 +173,7 @@ pub fn apply(target: Target, postscript: &str, label: &str) -> Result<String, St
     };
 
     let script_path =
-        std::env::temp_dir().join(format!("zfontmanager-apply-{}.jsx", std::process::id()));
+        std::env::temp_dir().join(format!("fontolo-apply-{}.jsx", std::process::id()));
     std::fs::write(&script_path, script_for(target, postscript, label))
         .map_err(|e| e.to_string())?;
     let path_literal = script_path.to_string_lossy().replace('\'', "''");

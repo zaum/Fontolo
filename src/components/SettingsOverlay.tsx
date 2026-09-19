@@ -136,7 +136,7 @@ export function SettingsOverlay() {
   const exportData = async () => {
     const dest = await save({
       title: t("settings.exportDataTitle"),
-      defaultPath: "zfontmanager-library.json",
+      defaultPath: "fontolo-library.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (dest) await useFontStore.getState().exportLibraryData(dest);

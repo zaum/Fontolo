@@ -15,7 +15,7 @@
 * Made cache hits read-only and removed the unused mutable lookup helper and obsolete eviction comments.
 * Kept temporary-directory identifiers independent in tests, without restoring production usage tracking.
 * Verified all 15 Rust tests, all 5 Node tests, and the TypeScript/Vite production build on Windows.
-* Built the development executable and restarted it with the development server available; the new process opened a responsive ZFontManager window. Linux and macOS runtime checks were not performed.
+* Built the development executable and restarted it with the development server available; the new process opened a responsive Fontolo window. Linux and macOS runtime checks were not performed.
 * Retained the 40,000-entry and estimated 256 MiB cache limits; the byte budget does not cap whole-application memory or transient deserialization allocations.
 * Kept single-writer atomic cache replacement. Serialization and file writing still hold the cache lock, so concurrent scans may wait; crash-left temporary files are not automatically deleted without a safe ownership criterion.
 * Left frontend bundle splitting and cache-lock redesign for measured follow-up work; no startup or scan timing improvement was claimed.
@@ -129,7 +129,7 @@
 
 * Integrated feature branch containing refined sidebar density and navigation improvements into main stream.
 
-`PR: zaum/ZFontManager#1` · `1a5c4f5`
+`PR: zaum/fontolo#1` · `1a5c4f5`
 
 ---
 
