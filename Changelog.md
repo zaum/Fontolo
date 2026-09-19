@@ -1,12 +1,4 @@
-# ZFontManager — Changelog
-
-* **Total commits:** 45
-* **Date range:** 2026-09-14 – 2026-09-17
-* **Environment / Context:** Personal fork & feature integration
-
----
-
-### <sup><sub style="font-size: 0.7em;">2026-09-18</sub></sup> · 🛠️ Maintenance · Affinity probe robustness, settings order, and reqwest TLS backend
+<sup><sub style="font-size: 0.7em;">2026-09-18</sub></sup> · 🛠️ Maintenance · Affinity probe robustness, settings order, and reqwest TLS backend
 
 * Moved the Affinity enable toggle above the connection row so users can turn the integration on before reading its status.
 * Treated a reachable Affinity socket with an unreadable SDK preamble as a documentation problem instead of a lost connection, with a longer preamble read timeout and clearer error text.
@@ -32,7 +24,6 @@
 `Uncommitted` · `working tree`
 
 ---
-
 
 ### 2026-09-17 · 🎨 UI/UX · Preview Size Slider Polish & Larger Maximum
 

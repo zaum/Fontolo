@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronRight, Info, Star, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
-import { spring, springSnappy, springSoft } from "../design/springs";
+import { spring, springBouncy, springSnappy, springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
 import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
 import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
@@ -83,6 +83,8 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   // Which tag chip is "armed": clicking a chip reveals the remove badge
   // floating above its top-right corner. Clicking it again disarms it.
   const [armedTag, setArmedTag] = useState<string | null>(null);
+  // Bumps on every star press so the icon replays its zoom-out pop.
+  const [starPop, setStarPop] = useState(0);
   const expandSignal = useFontStore((s) => s.expandSignal);
   const expandOpen = useFontStore((s) => s.expandOpen);
   useEffect(() => {
@@ -129,6 +131,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           aria-pressed={favorite}
           onClick={(e) => {
             e.stopPropagation();
+            setStarPop((p) => p + 1);
             const st = useFontStore.getState();
             if (st.selection.length > 1 && st.selection.includes(family.name)) {
               playStar(true);
@@ -140,8 +143,17 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           }}
           whileTap={{ scale: 0.85 }}
         >
-          <Star size={14} strokeWidth={1.5} />
+          <motion.span
+            key={starPop}
+            initial={starPop === 0 ? false : { scale: 1.8 }}
+            animate={{ scale: 1 }}
+            transition={springBouncy}
+            style={{ display: "grid", placeItems: "center" }}
+          >
+            <Star size={14} strokeWidth={1.5} />
+          </motion.span>
         </motion.button>
+        <span className="card-name">{family.name}</span>
         {family.tags.map((tag) => (
           <span
             key={tag}
@@ -184,7 +196,6 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         >
           + {t("card.addTag")}
         </button>
-        <span className="card-name">{family.name}</span>
         {family.faces.length > 1 && (
           <motion.button
             className="card-expand"

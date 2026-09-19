@@ -1,31 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X } from "lucide-react";
+import { Minus, Settings, Square, X } from "lucide-react";
 import { useFontStore } from "../state/fontStore";
 import { motion } from "motion/react";
 import { springSoft } from "../design/springs";
 import { useT } from "../lib/i18n";
-
-function SettingsGlyph({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <line x1="2.75" y1="4.75" x2="7.5" y2="4.75" />
-      <line x1="12.9" y1="4.75" x2="13.25" y2="4.75" />
-      <circle cx="10.2" cy="4.75" r="2" />
-      <line x1="2.75" y1="11.25" x2="3.1" y2="11.25" />
-      <line x1="8.5" y1="11.25" x2="13.25" y2="11.25" />
-      <circle cx="5.8" cy="11.25" r="2" />
-    </svg>
-  );
-}
 
 export function Titlebar() {
   const t = useT();
@@ -51,7 +29,7 @@ export function Titlebar() {
           aria-label={t("titlebar.settings")}
           onClick={() => setSettingsOpen(true)}
         >
-          <SettingsGlyph />
+          <Settings size={15} strokeWidth={1.5} />
         </button>
         <span className="titlebar-sep" />
         <button aria-label={t("titlebar.minimize")} onClick={() => void win.minimize()}>
