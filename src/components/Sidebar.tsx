@@ -486,7 +486,7 @@ export function Sidebar() {
           label={t("side.library")}
           count={scanning ? scanProgress.families : familyCount}
           index={i++}
-          pulsing={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
+          pulsing={scanning}
         />
         <NavRow
           active={browse === "favorites"}
@@ -687,7 +687,7 @@ export function Sidebar() {
             </button>
             <AnimatePresence>
               <SectionReset
-                show={tagSel.length > 0}
+                show={tagSel.length > 0 && !tagSel.some((tag) => protectedTags.includes(tag))}
                 label={t("side.resetFilter")}
                 onReset={() => setFilterSel(colSel, [], foundrySel)}
               />

@@ -425,23 +425,21 @@ pub fn scan_all(app: &tauri::AppHandle, extra: &[String], managed: &Path) -> Vec
     let total = files.len();
     let mut seen: std::collections::HashSet<PathBuf> =
         std::collections::HashSet::with_capacity(total);
+    let mut families_seen = std::collections::HashSet::new();
     let mut faces = Vec::with_capacity(total);
     for (done, (path, base_source)) in files.into_iter().enumerate() {
         seen.insert(path.clone());
         let source = classify(&path, base_source, managed);
-        faces.extend(cached_parse(&path, source));
+        let parsed = cached_parse(&path, source);
+        families_seen.extend(parsed.iter().map(|face| face.family.clone()));
+        faces.extend(parsed);
         if done % 10 == 0 || done + 1 == total {
-            let families = faces
-                .iter()
-                .map(|face| face.family.as_str())
-                .collect::<std::collections::HashSet<_>>()
-                .len();
             let _ = app.emit(
                 "scan:progress",
                 ScanProgress {
                     done: done + 1,
                     total,
-                    families,
+                    families: families_seen.len(),
                 },
             );
         }

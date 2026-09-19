@@ -348,7 +348,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   adobeAvailable: false,
   motionPref: "system",
   soundPref: "off",
-  themePref: "dark",
+  themePref: "light",
   localePref: getLocalePref(),
   bulkTagFor: null,
   onboarded: false,
@@ -384,7 +384,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
     });
     await listen<GoogleFontsProgress>("google-fonts:progress", (e) => {
       set({ googleFontsProgress: e.payload });
-      if (e.payload.phase === "downloading" && e.payload.done > 0 && e.payload.done % 10 === 0) {
+      if (e.payload.phase === "ready") {
         void useFontStore.getState().rescan();
       }
     });
@@ -425,7 +425,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
           : "off",
         themePref: (["dark", "light", "system"] as const).includes(prefs.themePref as ThemePref)
           ? (prefs.themePref as ThemePref)
-          : "dark",
+          : "light",
         onboarded: prefs.onboarded === true,
         localePref: isLocalePref(prefs.localePref) ? prefs.localePref : get().localePref,
         lastImported: Array.isArray(prefs.lastImported)
@@ -452,6 +452,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
 
     let watchTimer: ReturnType<typeof setTimeout> | undefined;
     await listen("fonts:changed", () => {
+      const googlePhase = get().googleFontsProgress.phase;
+      if (googlePhase === "checking" || googlePhase === "downloading") return;
       clearTimeout(watchTimer);
       watchTimer = setTimeout(() => {
         // Queue a trailing scan even when another scan is in progress.

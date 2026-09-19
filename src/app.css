@@ -1314,13 +1314,13 @@
 /* The "+ Add tag" button in the font list: same frame as the tag chips,
    uppercase and a touch smaller, but transparent (no fill). */
 .tag-add {
-  font-size: var(--fs-10);
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
   background: transparent;
-  border: 1px solid rgba(var(--ink-rgb), 0.12);
+  border: 1px dashed rgba(var(--ink-rgb), 0.12);
   border-radius: 4px;
   padding: 3px 8px;
   cursor: pointer;

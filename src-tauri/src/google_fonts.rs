@@ -63,17 +63,23 @@ pub fn decorate_faces(faces: &mut [FontFace]) {
         .iter()
         .map(|family| (family.family.as_str(), family))
         .collect();
+    let file_stem_metadata: HashMap<String, &GoogleFontFamily> = catalog
+        .family_metadata_list
+        .iter()
+        .map(|family| {
+            let stem = family
+                .family
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            (stem, family)
+        })
+        .collect();
     for face in faces.iter_mut().filter(|face| face.source == crate::font_types::FontSource::Google) {
         let family = metadata.get(face.family.as_str()).copied().or_else(|| {
             let file_stem = Path::new(&face.path).file_stem()?.to_string_lossy();
-            catalog.family_metadata_list.iter().find(|candidate| {
-                let prefix = candidate
-                    .family
-                    .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                    .collect::<String>();
-                file_stem.starts_with(&format!("{prefix}-"))
-            })
+            let key = file_stem.rsplit_once('-')?.0.rsplit_once('-')?.0;
+            file_stem_metadata.get(key).copied()
         });
         let Some(family) = family else { continue };
         face.family = family.family.clone();
