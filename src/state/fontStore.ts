@@ -8,6 +8,7 @@ import {
   type AppSettings,
   type Classification,
   type FontFace,
+  type GoogleFontsProgress,
   type InstallMode,
   type ScanProgress,
   type TrashEntry,
@@ -47,7 +48,7 @@ let scanGen = 0;
 // Requests during a scan invalidate its result and schedule one trailing scan.
 const scanQueue = new ScanQueue(async (isCurrent) => {
   const before = useFontStore.getState();
-  useFontStore.setState({ phase: "scanning", scanProgress: { done: 0, total: 0 } });
+  useFontStore.setState({ phase: "scanning", scanProgress: { done: 0, total: 0, families: 0 } });
   try {
     const [fonts, tags, collections, favorites, notes, trash] = await Promise.all([
       ipc.scanFonts(), ipc.getTags(), ipc.getCollections(),
@@ -87,6 +88,7 @@ export type Nav =
   | { kind: "affinity" }
   | { kind: "deactivated" }
   | { kind: "system" }
+  | { kind: "googleFonts" }
   | { kind: "lastImported" };
 
 export type TagCollectionNav =
@@ -101,7 +103,8 @@ export type BrowseKind =
   | "activatedSession"
   | "affinity"
   | "deactivated"
-  | "system";
+  | "system"
+  | "googleFonts";
 
 export type AreaKind = "main" | "trash" | "about";
 
@@ -115,6 +118,8 @@ export interface Family {
   tags: string[];
   totalSize: number;
   foundry: string | null;
+  designers: string[];
+  category: string | null;
   classification: Classification;
   scripts: string[];
 }
@@ -122,8 +127,10 @@ export interface Family {
 interface FontStore {
   phase: "scanning" | "ready" | "error";
   scanProgress: ScanProgress;
+  googleFontsProgress: GoogleFontsProgress;
   fonts: FontFace[];
   tags: Record<string, string[]>;
+  protectedTags: string[];
   collections: Record<string, string[]>;
   favorites: string[];
   sessionActivated: string[];
@@ -315,9 +322,11 @@ function applyLibrary(
 
 export const useFontStore = create<FontStore>((set, get) => ({
   phase: "scanning",
-  scanProgress: { done: 0, total: 0 },
+  scanProgress: { done: 0, total: 0, families: 0 },
+  googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: null },
   fonts: [],
   tags: {},
+  protectedTags: [],
   collections: {},
   favorites: [],
   sessionActivated: [],
@@ -334,7 +343,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   settingsOpen: false,
   helpOpen: false,
   paletteOpen: false,
-  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true },
+  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true },
   affinityConnection: null,
   adobeAvailable: false,
   motionPref: "system",
@@ -372,6 +381,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
     initStarted = true;
     await listen<ScanProgress>("scan:progress", (e) => {
       set({ scanProgress: e.payload });
+    });
+    await listen<GoogleFontsProgress>("google-fonts:progress", (e) => {
+      set({ googleFontsProgress: e.payload });
+      if (e.payload.phase === "downloading" && e.payload.done > 0 && e.payload.done % 10 === 0) {
+        void useFontStore.getState().rescan();
+      }
     });
     try {
       const prefs = (await ipc.getPrefs()) ?? {};
@@ -501,13 +516,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
     try {
       const finished = await ipc.peekFonts().catch(() => null);
       const warm = finished ? null : await ipc.warmFonts().catch(() => null);
-      const [tags, collections, favorites, notes, trash] = await Promise.all([
-        ipc.getTags(), ipc.getCollections(), ipc.getFavorites(), ipc.getNotes(), ipc.listTrash(),
+      const [tags, protectedTags, collections, favorites, notes, trash] = await Promise.all([
+        ipc.getTags(), ipc.getProtectedTags(), ipc.getCollections(), ipc.getFavorites(), ipc.getNotes(), ipc.listTrash(),
       ]);
       if (myGen !== scanGen) return;
       const now = get();
       const metadata = {
         tags: now.tags === before.tags ? tags : now.tags,
+        protectedTags,
         collections: now.collections === before.collections ? collections : now.collections,
         favorites: now.favorites === before.favorites ? favorites : now.favorites,
         notes: now.notes === before.notes ? notes : now.notes,
@@ -515,6 +531,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
       };
       if (finished) {
         applyLibrary(set, get, { fonts: finished, ...metadata });
+        if (get().settings.googleFontsEnabled) {
+          void ipc.syncGoogleFonts().then(async () => {
+            await get().rescan();
+            set({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
+          }).catch((error) => {
+            set({ googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: String(error) } });
+          });
+        }
         return;
       }
       set({ ...metadata, ...(warm ? { fonts: warm } : {}), phase: "scanning" });
@@ -527,6 +551,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
         fonts, tags: get().tags, collections: get().collections,
         favorites: get().favorites, notes: get().notes, trash: get().trash,
       });
+      if (get().settings.googleFontsEnabled) {
+        void ipc.syncGoogleFonts().then(async () => {
+          await get().rescan();
+          set({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
+        }).catch((error) => {
+          set({ googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: String(error) } });
+        });
+      }
     } catch (e) {
       if (myGen !== scanGen) return;
       set({ phase: "error" });
@@ -830,6 +862,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
 
   setFamilyTags: async (family, tags) => {
     const prev = get().tags;
+    const preserved = (prev[family] ?? []).filter((tag) => get().protectedTags.includes(tag));
+    tags = [...new Set([...tags, ...preserved])];
     const next = { ...prev };
     if (tags.length === 0) delete next[family];
     else next[family] = tags;
@@ -1439,6 +1473,8 @@ export function computeFamilies(
         tags: tags[f.family] ?? [],
         totalSize: 0,
         foundry: null,
+        designers: [],
+        category: null,
         classification: "unknown",
         scripts: [],
       };
@@ -1448,6 +1484,10 @@ export function computeFamilies(
     if (!fam.formats.includes(f.format)) fam.formats.push(f.format);
     fam.isVariable ||= f.isVariable;
     fam.foundry ??= f.foundry;
+    fam.category ??= f.category;
+    for (const designer of f.designers ?? []) {
+      if (!fam.designers.includes(designer)) fam.designers.push(designer);
+    }
 
     if (fam.classification === "unknown") fam.classification = f.classification;
     for (const s of f.scripts ?? []) {
@@ -1514,6 +1554,9 @@ export function selectVisibleFamilies(s: {
   if (s.browse === "system") {
     browsePred = (f) =>
       f.faces.length > 0 && f.faces.every((face) => face.source === "system");
+  }
+  if (s.browse === "googleFonts") {
+    browsePred = (f) => f.faces.some((face) => face.source === "google");
   }
   let groupPred: ((f: Family) => boolean) | null = null;
   // Collections and tags widen the view together (union), but a selected

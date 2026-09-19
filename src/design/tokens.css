@@ -23,15 +23,10 @@
   --glass-top-highlight: rgba(255, 255, 255, 0.1);
   --glass-top-highlight-strong: rgba(255, 255, 255, 0.16);
 
-  --shadow-ground: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-mass: 0 6px 12px rgba(0, 0, 0, 0.3);
-  --shadow-ambient: 0 24px 48px rgba(0, 0, 0, 0.25);
 
   --accent-a: #7c3aed;
   --accent-b: #4f46e5;
   --accent-gradient: linear-gradient(135deg, #7c3aed, #4f46e5);
-  --accent-glow: rgba(124, 58, 237, 0.45);
-  --accent-glow-soft: rgba(124, 58, 237, 0.22);
 
   --success: #4ade80;
   --warning: #fbbf24;
@@ -94,12 +89,7 @@
   --glass-top-highlight: rgba(255, 255, 255, 0.75);
   --glass-top-highlight-strong: rgba(255, 255, 255, 1);
 
-  --shadow-ground: 0 1px 2px rgba(80, 80, 120, 0.08);
-  --shadow-mass: 0 6px 12px rgba(80, 80, 120, 0.045);
-  --shadow-ambient: 0 24px 48px rgba(80, 80, 120, 0.045);
 
-  --accent-glow: rgba(124, 58, 237, 0.38);
-  --accent-glow-soft: rgba(124, 58, 237, 0.16);
 
   --success: #22c55e;
   --warning: #f59e0b;
@@ -215,7 +205,6 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-glow-soft);
   outline-offset: 1px;
   border-radius: 5px;
 }

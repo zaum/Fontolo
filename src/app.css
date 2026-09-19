@@ -71,7 +71,6 @@
   height: 21px;
   display: block;
   user-select: none;
-  filter: drop-shadow(0 0 7px var(--accent-glow-soft)) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
 }
 .titlebar-title {
   font-size: var(--fs-13);
@@ -144,7 +143,6 @@
 .sidebar-resize:hover,
 .sidebar-resize:active {
   color: var(--text-tertiary);
-  background: linear-gradient(270deg, var(--accent-glow-soft), transparent);
 }
 
 /* While the sidebar is being dragged, freeze every inner transition and
@@ -432,7 +430,6 @@
   background: var(--e2);
 }
 .topbar-field:focus-within {
-  border-color: var(--accent-glow);
   background: var(--e1);
 }
 .topbar-field input {
@@ -677,7 +674,6 @@
 .feat-on {
   color: var(--text-primary);
   background: rgba(124, 58, 237, 0.14);
-  border-color: var(--accent-glow-soft);
 }
 .feat-reset {
   align-self: flex-start;
@@ -697,7 +693,6 @@
 
 .filter-live {
   color: var(--text-primary);
-  border-color: var(--accent-glow-soft);
 }
 .filter-live svg {
   color: var(--accent-a);
@@ -889,7 +884,6 @@
 .grid-row .family-card.card-selected:hover {
   background: none;
   border-color: transparent;
-  box-shadow: inset 2px 0 0 var(--accent-a);
 }
 .grid-row .card-info-strip {
   border-left-color: transparent;
@@ -1309,7 +1303,6 @@
   padding: 0;
   background: var(--e3);
   border: 1px solid rgba(var(--ink-rgb), 0.12);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   color: var(--text-secondary);
   z-index: 2;
 }
@@ -1350,7 +1343,6 @@
   transition: border-color var(--t-quick) ease;
 }
 .tag-input:focus-within {
-  border-color: var(--accent-glow);
 }
 .tag-input input {
   background: none;
@@ -1593,7 +1585,6 @@
   height: 96px;
   margin-bottom: 18px;
   user-select: none;
-  filter: drop-shadow(0 0 28px var(--accent-glow-soft)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
 }
 .about-name {
   font-size: var(--fs-24, 24px);
@@ -1696,7 +1687,6 @@
   background:
     radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, var(--accent-a) 10%, transparent), transparent 65%),
     var(--e3);
-  border-color: var(--accent-glow);
   border-style: solid;
 }
 .dropchoice-dim {
@@ -2054,6 +2044,33 @@
   color: var(--accent-a);
   opacity: 0.75;
 }
+
+.nav-row.nav-sync-pulse .nav-icon,
+.nav-row.nav-sync-pulse .nav-label {
+  animation: google-fonts-pulse 1.05s ease-in-out infinite;
+}
+
+@keyframes google-fonts-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% {
+    opacity: 1;
+    color: var(--accent-a);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-row.nav-sync-pulse .nav-icon,
+  .nav-row.nav-sync-pulse .nav-label {
+    animation: none;
+    color: var(--accent-a);
+  }
+}
+
+:root[data-motion="reduced"] .nav-row.nav-sync-pulse .nav-icon,
+:root[data-motion="reduced"] .nav-row.nav-sync-pulse .nav-label {
+  animation: none;
+  color: var(--accent-a);
+}
 .sidebar-add:hover {
   color: var(--text-primary);
   border-color: rgba(var(--ink-rgb), 0.08);
@@ -2065,7 +2082,6 @@
   min-height: 28px;
   padding: 4px 10px;
   border-radius: 5px;
-  border: 1px solid var(--accent-glow);
   background: var(--e1);
   color: var(--text-tertiary);
   margin: 1px 0;
@@ -2114,7 +2130,6 @@
 .detail-resize:hover,
 .detail-resize:active {
   color: var(--text-tertiary);
-  background: linear-gradient(90deg, var(--accent-glow-soft), transparent);
 }
 .detail-heading-row {
   display: flex;
@@ -2283,7 +2298,6 @@
 .detail-resize:hover::before,
 .detail-resize:active::before {
   width: 2px;
-  background: var(--accent-glow);
 }
 
 .detail-close {
@@ -3209,7 +3223,6 @@
 .settings-add-folder:hover {
   color: var(--text-primary);
   background: var(--e1);
-  border-color: var(--accent-glow);
 }
 .settings-add-folder:disabled {
   opacity: 0.5;
@@ -3538,7 +3551,6 @@
   color: var(--text-tertiary);
 }
 .note-editor:focus {
-  border-color: var(--accent-glow);
 }
 
 .sound-toggle {
@@ -3597,7 +3609,6 @@
   width: 36px;
   height: 36px;
   user-select: none;
-  filter: drop-shadow(0 0 10px var(--accent-glow-soft));
   flex-shrink: 0;
 }
 .tour-invite-text {
@@ -3758,7 +3769,6 @@
 .lang-trigger-open {
   background: var(--e2);
   color: var(--text-primary);
-  border-color: var(--accent-glow);
 }
 .lang-trigger-label {
   flex-shrink: 0;

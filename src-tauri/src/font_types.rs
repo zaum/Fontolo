@@ -26,6 +26,8 @@ pub enum FontSource {
     User,
 
     Managed,
+
+    Google,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +53,8 @@ pub struct FontFace {
     pub style: String,
     pub postscript_name: Option<String>,
     pub foundry: Option<String>,
+    pub designers: Vec<String>,
+    pub category: Option<String>,
     pub license: Option<String>,
     pub license_url: Option<String>,
     pub format: FontFormat,

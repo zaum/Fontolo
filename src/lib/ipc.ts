@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type FontFormat = "otf" | "ttf" | "woff" | "woff2" | "unknown";
-export type FontSource = "system" | "user" | "managed";
+export type FontSource = "system" | "user" | "managed" | "google";
 export type Classification = "serif" | "sans" | "mono" | "display" | "script" | "unknown";
 
 export interface VariationAxis {
@@ -21,6 +21,8 @@ export interface FontFace {
   style: string;
   postscriptName: string | null;
   foundry: string | null;
+  designers: string[];
+  category: string | null;
   license: string | null;
   licenseUrl: string | null;
   format: FontFormat;
@@ -54,6 +56,16 @@ export interface InstallResult {
 export interface ScanProgress {
   done: number;
   total: number;
+  families: number;
+}
+
+export interface GoogleFontsProgress {
+  phase: "checking" | "downloading" | "ready";
+  done: number;
+  total: number;
+  family: string | null;
+  downloaded: number;
+  error: string | null;
 }
 
 export interface InstallProgress {
@@ -74,6 +86,7 @@ export interface AppSettings {
   libraryDirEnabled: boolean;
   affinityEnabled: boolean;
   affinityDeactivateOnQuit: boolean;
+  googleFontsEnabled: boolean;
 }
 
 export interface AffinityConnection {
@@ -113,6 +126,7 @@ export const ipc = {
   deleteTrashEntry: (entryId: string) => invoke<void>("delete_trash_entry", { entryId }),
   emptyTrash: () => invoke<void>("empty_trash"),
   getTags: () => invoke<Record<string, string[]>>("get_tags"),
+  getProtectedTags: () => invoke<string[]>("get_protected_tags"),
   setTags: (family: string, tags: string[]) => invoke<void>("set_tags", { family, tags }),
   getFavorites: () => invoke<string[]>("get_favorites"),
   getNotes: () => invoke<Record<string, string>>("get_notes"),
@@ -138,6 +152,7 @@ export const ipc = {
   exportFonts: (paths: string[], destDir: string) =>
     invoke<number>("export_fonts", { paths, destDir }),
   adobeAvailable: () => invoke<boolean>("adobe_available"),
+  syncGoogleFonts: () => invoke<void>("sync_google_fonts"),
   applyFontInApp: (app: AdobeApp, postscriptName: string, label: string) =>
     invoke<string>("apply_font_in_app", { app, postscriptName, label }),
   getPrefs: () => invoke<Record<string, unknown> | null>("get_prefs"),

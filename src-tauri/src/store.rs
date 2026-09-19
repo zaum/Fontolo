@@ -11,6 +11,9 @@ pub struct AppState {
 
     pub tags: HashMap<String, Vec<String>>,
 
+    #[serde(default)]
+    pub protected_tags: HashSet<String>,
+
     pub collections: HashMap<String, Vec<String>>,
 
     pub favorites: HashSet<String>,
@@ -45,6 +48,9 @@ pub struct AppState {
     /// Deactivate Affinity session fonts when Affinity quits.
     #[serde(default = "default_true")]
     pub affinity_deactivate_on_quit: bool,
+
+    #[serde(default = "default_true")]
+    pub google_fonts_enabled: bool,
 }
 
 pub struct Store(pub Mutex<AppState>);

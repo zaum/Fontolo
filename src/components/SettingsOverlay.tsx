@@ -15,6 +15,8 @@ import {
   SunMoon,
   Volume2,
   X,
+  Globe2,
+  RefreshCw,
 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
@@ -33,11 +35,12 @@ import { APP_LICENSE, APP_VERSION } from "../lib/version";
 const REQUEST_LANGUAGE_URL =
   "https://github.com/zaum/fontolo/issues/new?title=Language%20request%3A%20";
 
-type SettingsCategoryId = "language" | "library" | "autoActivation" | "appearance";
+type SettingsCategoryId = "language" | "library" | "googleFonts" | "autoActivation" | "appearance";
 
 const CATEGORIES: { id: SettingsCategoryId; icon: typeof Languages }[] = [
   { id: "language", icon: Languages },
   { id: "library", icon: Library },
+  { id: "googleFonts", icon: Globe2 },
   { id: "autoActivation", icon: Link2 },
   { id: "appearance", icon: Palette },
 ];
@@ -48,6 +51,8 @@ function categoryTitleKey(id: SettingsCategoryId): TKey {
       return "settings.language";
     case "library":
       return "settings.library";
+    case "googleFonts":
+      return "settings.googleFonts";
     case "autoActivation":
       return "settings.autoActivation";
     case "appearance":
@@ -70,12 +75,21 @@ export function SettingsOverlay() {
   const accent = useFontStore((s) => s.accent);
   const setAccent = useFontStore((s) => s.setAccent);
   const scanning = useFontStore((s) => s.phase === "scanning");
+  const googleFontsProgress = useFontStore((s) => s.googleFontsProgress);
   const scanProgress = useFontStore((s) => s.scanProgress);
   const trapRef = useFocusTrap<HTMLDivElement>(openState);
   const [defaultLibDir, setDefaultLibDir] = useState("");
   const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>("language");
   const affinityConnection = useFontStore((s) => s.affinityConnection);
   const refreshAffinityConnection = useFontStore((s) => s.refreshAffinityConnection);
+
+  const syncGoogleFonts = () => {
+    void ipc.syncGoogleFonts().then(async () => {
+      const store = useFontStore.getState();
+      await store.rescan();
+      useFontStore.setState({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     if (openState) void refreshAffinityConnection();
@@ -373,6 +387,40 @@ export function SettingsOverlay() {
                             {t("settings.import")}
                           </button>
                         </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {activeCategory === "googleFonts" && (
+                    <section className="settings-section">
+                      <div className="detail-heading">{t("settings.googleFonts")}</div>
+                      <div className="settings-row">
+                        <div>
+                          <div className="settings-label"><Globe2 size={13} strokeWidth={1.5} /> {t("settings.googleFontsEnable")}</div>
+                          <div className="settings-sub">{t("settings.googleFontsEnableSub")}</div>
+                        </div>
+                        <PillToggle
+                          on={settings.googleFontsEnabled}
+                          onChange={(on) => {
+                            void updateSettings({ ...settings, googleFontsEnabled: on });
+                            if (on) syncGoogleFonts();
+                          }}
+                          label={t("settings.googleFontsEnable")}
+                        />
+                      </div>
+                      <div className="settings-row">
+                        <div>
+                          <div className="settings-label">{t("settings.googleFontsSync")}</div>
+                          <div className="settings-sub">
+                            {googleFontsProgress.phase === "downloading" && googleFontsProgress.total > 0
+                              ? t("settings.googleFontsProgress", { done: googleFontsProgress.done, total: googleFontsProgress.total })
+                              : t("settings.googleFontsSyncSub")}
+                          </div>
+                        </div>
+                        <button className="settings-data-btn" onClick={syncGoogleFonts} disabled={!settings.googleFontsEnabled || googleFontsProgress.phase === "downloading"}>
+                          <RefreshCw size={13} strokeWidth={1.5} className={googleFontsProgress.phase === "downloading" ? "settings-scanning-icon" : undefined} />
+                          {t("settings.googleFontsSync")}
+                        </button>
                       </div>
                     </section>
                   )}

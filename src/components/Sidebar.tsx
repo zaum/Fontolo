@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, GripVertical, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2 } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Clock, FolderOpen, GripVertical, History, Info, Keyboard, Library, Monitor, Plus, Power, PowerOff, RotateCcw, Sparkles, Star, Tag, Trash2, Globe2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openContextMenu } from "../design/primitives/ContextMenu";
 import { spring, springSoft, staggerDelay } from "../design/springs";
@@ -23,6 +23,7 @@ function NavRow({
   index,
   onContextMenu,
   related,
+  pulsing,
   rowRef,
 }: {
   active: boolean;
@@ -36,6 +37,7 @@ function NavRow({
   onContextMenu?: (e: React.MouseEvent) => void;
   /** The row belongs to the currently selected family (accent-tinted). */
   related?: boolean;
+  pulsing?: boolean;
   /** Ref sink so the sidebar can scroll the row into view. */
   rowRef?: (el: HTMLElement | null) => void;
 }) {
@@ -43,7 +45,7 @@ function NavRow({
     <motion.button
       ref={rowRef}
       data-family-row={related ? label : undefined}
-      className={`nav-row ${active ? "nav-active" : ""} ${related ? "nav-related" : ""}`}
+      className={`nav-row ${active ? "nav-active" : ""} ${related ? "nav-related" : ""} ${pulsing ? "nav-sync-pulse" : ""}`}
       onClick={onPick}
       onContextMenu={onContextMenu}
       initial={{ opacity: 0, x: -12 }}
@@ -167,10 +169,14 @@ export function Sidebar() {
   const t = useT();
   const fonts = useFontStore((s) => s.fonts);
   const tags = useFontStore((s) => s.tags);
+  const protectedTags = useFontStore((s) => s.protectedTags);
   const collections = useFontStore((s) => s.collections);
   const favorites = useFontStore((s) => s.favorites);
   const lastImported = useFontStore((s) => s.lastImported);
   const trash = useFontStore((s) => s.trash);
+  const googleFontsProgress = useFontStore((s) => s.googleFontsProgress);
+  const scanProgress = useFontStore((s) => s.scanProgress);
+  const scanning = useFontStore((s) => s.phase === "scanning");
   const deleteCollection = useFontStore((s) => s.deleteCollection);
   const renameCollection = useFontStore((s) => s.renameCollection);
   const setFamilyTags = useFontStore((s) => s.setFamilyTags);
@@ -204,6 +210,7 @@ export function Sidebar() {
   const systemCount = allFamilies.filter(
     (f) => f.faces.length > 0 && f.faces.every((face) => face.source === "system"),
   ).length;
+  const googleFontsCount = allFamilies.filter((f) => f.faces.some((face) => face.source === "google")).length;
   const tagCounts = allTags(tags);
   const foundryCounts = allFoundryCounts(fonts, tags);
   // Foundries with more than one family come first (largest count first),
@@ -415,6 +422,7 @@ export function Sidebar() {
       : foundrySel[0];
 
   const removeTagEverywhere = (tag: string) => {
+    if (protectedTags.includes(tag)) return;
     for (const [family, list] of Object.entries(tags)) {
       if (list.includes(tag)) {
         void setFamilyTags(family, list.filter((t) => t !== tag));
@@ -476,8 +484,9 @@ export function Sidebar() {
           onPick={() => pickBrowse("library")}
           icon={<Library size={15} strokeWidth={1.5} />}
           label={t("side.library")}
-          count={familyCount}
+          count={scanning ? scanProgress.families : familyCount}
           index={i++}
+          pulsing={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
         />
         <NavRow
           active={browse === "favorites"}
@@ -548,6 +557,20 @@ export function Sidebar() {
           label={t("side.system")}
           count={systemCount}
           index={i++}
+        />
+        <NavRow
+          active={browse === "googleFonts"}
+          lead
+          pillId="nav-pill-browse"
+          onPick={() => pickBrowse("googleFonts")}
+          icon={<Globe2 size={15} strokeWidth={1.5} />}
+          label={t("side.googleFonts")}
+          count={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"
+            ? googleFontsProgress.done
+            : googleFontsCount}
+          index={i++}
+          related={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
+          pulsing={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
         />
           </motion.div>
         )}

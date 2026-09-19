@@ -1,5 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
+import { MotionConfig, motion } from "motion/react";
 import { Clock, FolderOpen, History, LoaderCircle, Monitor, Power, PowerOff, SearchX, Sparkles, Star, Tag as TagIcon, Type } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { DetailPanel } from "./components/DetailPanel";
@@ -21,7 +21,7 @@ import { Onboarding } from "./components/Onboarding";
 import { ContextMenuHost, openContextMenuAt } from "./design/primitives/ContextMenu";
 import { buildFamilyMenu } from "./lib/menus";
 import { Toaster } from "./design/primitives/Toast";
-import { spring, springSoft } from "./design/springs";
+import { spring } from "./design/springs";
 import { familiesFor, selectVisibleFamilies, useFontStore, type BrowseKind } from "./state/fontStore";
 import { useT } from "./lib/i18n";
 
@@ -41,29 +41,6 @@ function ScanStatus() {
 
 // Pinned to the bottom of the content column whenever the library is scanned
 // while fonts are already on screen (file watcher, manual rescan, imports).
-function BackgroundScanStatus() {
-  const scanning = useFontStore((s) => s.phase === "scanning");
-  const hasFonts = useFontStore((s) => s.fonts.length > 0);
-  const show = scanning && hasFonts;
-  return (
-    <div className="scan-badge-slot" aria-hidden={!show}>
-      <AnimatePresence>
-        {show && (
-          <motion.div
-            className="scan-badge glass-e3"
-            initial={{ opacity: 0, y: 10, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={springSoft}
-          >
-            <ScanStatus />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 function ScanSkeleton() {
   return (
     <div className="scan-skeleton">
@@ -340,7 +317,6 @@ export default function App() {
             <main className="app-content">
               <MainContent />
             </main>
-            <BackgroundScanStatus />
           </div>
           <DetailPanel />
         </div>

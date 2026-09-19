@@ -13,6 +13,7 @@ use walkdir::WalkDir;
 pub struct ScanProgress {
     pub done: usize,
     pub total: usize,
+    pub families: usize,
 }
 
 /// Parse cache: a full rescan re-reads thousands of files, but the watcher
@@ -360,6 +361,7 @@ pub fn effective_managed_dir(library_dir: Option<&str>) -> PathBuf {
 fn font_dirs() -> Vec<(PathBuf, FontSource)> {
     let mut dirs_list: Vec<(PathBuf, FontSource)> = Vec::new();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    dirs_list.push((crate::google_fonts::directory(), FontSource::Google));
 
     #[cfg(target_os = "linux")]
     {
@@ -428,12 +430,18 @@ pub fn scan_all(app: &tauri::AppHandle, extra: &[String], managed: &Path) -> Vec
         seen.insert(path.clone());
         let source = classify(&path, base_source, managed);
         faces.extend(cached_parse(&path, source));
-        if done % 25 == 0 || done + 1 == total {
+        if done % 10 == 0 || done + 1 == total {
+            let families = faces
+                .iter()
+                .map(|face| face.family.as_str())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
             let _ = app.emit(
                 "scan:progress",
                 ScanProgress {
                     done: done + 1,
                     total,
+                    families,
                 },
             );
         }
@@ -605,6 +613,8 @@ mod tests {
             style: "Regular".to_string(),
             postscript_name: None,
             foundry: None,
+            designers: Vec::new(),
+            category: None,
             license: None,
             license_url: None,
             format: FontFormat::Ttf,

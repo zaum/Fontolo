@@ -2,6 +2,7 @@ mod activation;
 mod adobe;
 mod affinity;
 mod font_types;
+mod google_fonts;
 mod installer;
 mod parser;
 mod registry;
@@ -147,6 +148,7 @@ async fn scan_all_faces(app: &tauri::AppHandle) -> Result<Vec<FontFace>, String>
     if state.linked.len() != before {
         let _ = store::save(&state);
     }
+    google_fonts::decorate_faces(&mut faces);
     let mut faces: Vec<FontFace> = faces
         .into_iter()
         .map(|mut f| {
@@ -467,8 +469,28 @@ fn get_tags(store: State<Store>) -> Result<HashMap<String, Vec<String>>, String>
 }
 
 #[tauri::command]
+fn get_protected_tags(store: State<Store>) -> Result<Vec<String>, String> {
+    let state = store.0.lock().map_err(|e| e.to_string())?;
+    Ok(state.protected_tags.iter().cloned().collect())
+}
+
+#[tauri::command]
 fn set_tags(store: State<Store>, family: String, tags: Vec<String>) -> Result<(), String> {
     let mut state = store.0.lock().map_err(|e| e.to_string())?;
+    let protected = state
+        .tags
+        .get(&family)
+        .into_iter()
+        .flatten()
+        .filter(|tag| state.protected_tags.contains(*tag))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut tags = tags;
+    for tag in protected {
+        if !tags.contains(&tag) {
+            tags.push(tag);
+        }
+    }
     if tags.is_empty() {
         state.tags.remove(&family);
     } else {
@@ -726,6 +748,12 @@ struct Settings {
     library_dir_enabled: bool,
     affinity_enabled: bool,
     affinity_deactivate_on_quit: bool,
+    #[serde(default = "default_google_fonts_enabled")]
+    google_fonts_enabled: bool,
+}
+
+fn default_google_fonts_enabled() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -739,6 +767,7 @@ fn get_settings(store: State<Store>) -> Result<Settings, String> {
         library_dir_enabled: state.library_dir_enabled,
         affinity_enabled: state.affinity_enabled,
         affinity_deactivate_on_quit: state.affinity_deactivate_on_quit,
+        google_fonts_enabled: state.google_fonts_enabled,
     })
 }
 
@@ -757,6 +786,7 @@ fn set_settings(
         state.library_dir_enabled = settings.library_dir_enabled;
         state.affinity_enabled = settings.affinity_enabled;
         state.affinity_deactivate_on_quit = settings.affinity_deactivate_on_quit;
+        state.google_fonts_enabled = settings.google_fonts_enabled;
         store::save(&state)?;
     }
     allow_dir(
@@ -834,6 +864,11 @@ async fn apply_font_in_app(
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn sync_google_fonts(app: tauri::AppHandle) -> Result<(), String> {
+    google_fonts::sync(app).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut state = store::load();
@@ -897,6 +932,7 @@ pub fn run() {
             delete_trash_entry,
             empty_trash,
             get_tags,
+            get_protected_tags,
             set_tags,
             get_collections,
             set_collection,
@@ -921,6 +957,7 @@ pub fn run() {
             default_library_dir,
             adobe_available,
             apply_font_in_app
+            ,sync_google_fonts
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -947,6 +984,8 @@ mod tests {
             style: "Regular".to_string(),
             postscript_name: None,
             foundry: None,
+            designers: Vec::new(),
+            category: None,
             license: None,
             license_url: None,
             format: FontFormat::Ttf,

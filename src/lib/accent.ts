@@ -32,12 +32,6 @@ function shade(hex: string, f: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
-function rgba(hex: string, alpha: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
-}
-
 export function loadAccent(): string {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -63,6 +57,4 @@ export function applyAccent(hex: string): void {
   root.style.setProperty("--accent-a", hex);
   root.style.setProperty("--accent-b", b);
   root.style.setProperty("--accent-gradient", `linear-gradient(135deg, ${hex}, ${b})`);
-  root.style.setProperty("--accent-glow", rgba(hex, 0.45));
-  root.style.setProperty("--accent-glow-soft", rgba(hex, 0.22));
 }
