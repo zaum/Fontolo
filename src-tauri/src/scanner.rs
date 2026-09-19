@@ -361,7 +361,9 @@ pub fn effective_managed_dir(library_dir: Option<&str>) -> PathBuf {
 fn font_dirs() -> Vec<(PathBuf, FontSource)> {
     let mut dirs_list: Vec<(PathBuf, FontSource)> = Vec::new();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    dirs_list.push((crate::google_fonts::directory(), FontSource::Google));
+    // Google Fonts deliberately has no directory here. Its previews are a cache,
+    // not a library, and its activated files live in the ordinary library
+    // folder, where they are picked up with every other font.
 
     #[cfg(target_os = "linux")]
     {

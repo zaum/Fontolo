@@ -51,6 +51,14 @@ pub struct AppState {
 
     #[serde(default = "default_true")]
     pub google_fonts_enabled: bool,
+
+    /// Google fonts downloaded from the catalogue and installed into the library
+    /// folder. Keeping the list here is what lets an installed Google font stay
+    /// recognisable as a Google font: the file itself sits in the normal font
+    /// folder (the only place every OS actually reads), so its `FontSource`
+    /// cannot say where it came from.
+    #[serde(default)]
+    pub google_installed: HashSet<String>,
 }
 
 pub struct Store(pub Mutex<AppState>);

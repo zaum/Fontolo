@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { MenuItem } from "../design/primitives/ContextMenu";
 import { toast } from "../design/primitives/Toast";
-import { allTags, familiesFor, useFontStore, type Family } from "../state/fontStore";
+import { allTags, familiesFor, isGoogleVirtualFace, useFontStore, type Family } from "../state/fontStore";
 import { ipc } from "./ipc";
 import { exportSpecimen } from "./specimen";
 import { t } from "./i18n";
@@ -224,7 +224,9 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
   const collectionNames = Object.keys(s.collections).sort((a, b) =>
     a.localeCompare(b),
   );
-  const canUninstall = family.faces.some((f) => f.source !== "system");
+  const canUninstall = family.faces.some((f) => f.source !== "system" && !isGoogleVirtualFace(f));
+  // A catalogue family has no file yet: nothing to export, copy or reveal.
+  const hasFiles = family.faces.some((f) => !isGoogleVirtualFace(f));
 
   const favorite = s.favorites.includes(family.name);
   const items: MenuItem[] = [
@@ -285,11 +287,28 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
       action: () => useFontStore.setState({ pendingCollectionFor: family.name }),
     },
     { kind: "separator" },
-    {
-      label: t("menu.exportFamily"),
-      icon: <Download size={14} strokeWidth={1.5} />,
-      action: () => void exportFamily(family),
-    },
+    ...(hasFiles
+      ? [
+          {
+            label: t("menu.exportFamily"),
+            icon: <Download size={14} strokeWidth={1.5} />,
+            action: () => void exportFamily(family),
+          } satisfies MenuItem,
+          {
+            label: t("menu.copyFilePath"),
+            icon: <Copy size={14} strokeWidth={1.5} />,
+            action: () => copyText(lead.path, t("copy.filePath")),
+          } satisfies MenuItem,
+          {
+            label: t("menu.showInFileManager"),
+            icon: <FolderOpen size={14} strokeWidth={1.5} />,
+            action: () =>
+              revealItemInDir(lead.path).catch((e) =>
+                toast.error(t("toast.couldntOpenFileManager"), String(e)),
+              ),
+          } satisfies MenuItem,
+        ]
+      : []),
     {
       label: t("menu.exportSpecimen"),
       icon: <ImageIcon size={14} strokeWidth={1.5} />,
@@ -302,19 +321,6 @@ export function buildFamilyMenu(family: Family): MenuItem[] {
       label: t("menu.copyFamilyName"),
       icon: <Copy size={14} strokeWidth={1.5} />,
       action: () => copyText(family.name, t("copy.familyName")),
-    },
-    {
-      label: t("menu.copyFilePath"),
-      icon: <Copy size={14} strokeWidth={1.5} />,
-      action: () => copyText(lead.path, t("copy.filePath")),
-    },
-    {
-      label: t("menu.showInFileManager"),
-      icon: <FolderOpen size={14} strokeWidth={1.5} />,
-      action: () =>
-        revealItemInDir(lead.path).catch((e) =>
-          toast.error(t("toast.couldntOpenFileManager"), String(e)),
-        ),
     },
   ];
 

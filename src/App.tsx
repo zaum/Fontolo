@@ -143,6 +143,8 @@ function MainContent() {
   const scriptFilter = useFontStore((s) => s.scriptFilter);
   const variableOnly = useFontStore((s) => s.variableOnly);
   const sort = useFontStore((s) => s.sort);
+  const googleCatalog = useFontStore((s) => s.googleCatalog);
+  const googleMeta = useFontStore((s) => s.googleMeta);
 
   const foundrySel = useFontStore((s) => s.foundrySel);
   const families = useMemo(
@@ -150,8 +152,9 @@ function MainContent() {
       selectVisibleFamilies({
         fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search,
         classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, selFoundrys: foundrySel, sort,
+        googleCatalog, googleMeta,
       }),
-    [fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort],
+    [fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort, googleCatalog, googleMeta],
   );
 
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);

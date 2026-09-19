@@ -60,12 +60,52 @@ export interface ScanProgress {
 }
 
 export interface GoogleFontsProgress {
-  phase: "checking" | "downloading" | "ready";
+  phase: "checking" | "ready";
   done: number;
   total: number;
   family: string | null;
+  /** Families the last catalogue refresh added. */
   downloaded: number;
+  failed: number;
   error: string | null;
+}
+
+/** One family of the Google Fonts catalogue. Metadata only — no font file. */
+export interface GoogleFamily {
+  family: string;
+  category: string | null;
+  designers: string[];
+  subsets: string[];
+  axes: unknown[];
+  lastModified: string | null;
+}
+
+/** A desktop style of a family. `key` is what the backend takes back. */
+export interface GoogleStyle {
+  key: string;
+  label: string;
+  weight: number;
+  italic: boolean;
+  postscript?: string | null;
+  fileName?: string | null;
+}
+
+export interface GoogleFamilyInfo {
+  family: string;
+  license: string | null;
+  styles: GoogleStyle[];
+}
+
+/** A cached web font, and the Unicode ranges it is responsible for. */
+export interface GooglePreviewFile {
+  path: string;
+  unicodeRange: string;
+}
+
+export interface GoogleInstallResult {
+  faces: FontFace[];
+  installed: string[];
+  errors: string[];
 }
 
 export interface InstallProgress {
@@ -152,7 +192,17 @@ export const ipc = {
   exportFonts: (paths: string[], destDir: string) =>
     invoke<number>("export_fonts", { paths, destDir }),
   adobeAvailable: () => invoke<boolean>("adobe_available"),
-  syncGoogleFonts: () => invoke<void>("sync_google_fonts"),
+  // Google Fonts: the catalogue is metadata, the previews are fetched on
+  // demand, and a style only becomes a real font file when it is activated.
+  googleCatalog: () => invoke<GoogleFamily[]>("google_catalog"),
+  refreshGoogleCatalog: () => invoke<number>("refresh_google_catalog"),
+  googleStyles: (family: string) => invoke<GoogleFamilyInfo>("google_styles", { family }),
+  googlePreview: (family: string, style: string) =>
+    invoke<GooglePreviewFile[]>("google_preview", { family, style }),
+  installGoogleFont: (family: string, styles: string[]) =>
+    invoke<GoogleInstallResult>("install_google_font", { family, styles }),
+  googleCacheBytes: () => invoke<number>("google_cache_bytes"),
+  clearGoogleCache: () => invoke<number>("clear_google_cache"),
   applyFontInApp: (app: AdobeApp, postscriptName: string, label: string) =>
     invoke<string>("apply_font_in_app", { app, postscriptName, label }),
   getPrefs: () => invoke<Record<string, unknown> | null>("get_prefs"),

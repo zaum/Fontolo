@@ -8,7 +8,11 @@ import {
   type AppSettings,
   type Classification,
   type FontFace,
+  type GoogleFamily,
+  type GoogleFamilyInfo,
   type GoogleFontsProgress,
+  type GooglePreviewFile,
+  type GoogleStyle,
   type InstallMode,
   type ScanProgress,
   type TrashEntry,
@@ -16,6 +20,7 @@ import {
 import { matchAffinityFonts, type AffinityEvent } from "../lib/affinity";
 import { applyAccent, loadAccent, saveAccent } from "../lib/accent";
 import { toast } from "../design/primitives/Toast";
+import { forgetGoogleFace, formatBytes } from "../lib/fontLoader";
 import { setSoundLevel, type SoundLevel } from "../lib/sound";
 import { applyTheme, type ThemePref } from "../lib/theme";
 import {
@@ -122,12 +127,37 @@ export interface Family {
   category: string | null;
   classification: Classification;
   scripts: string[];
+  /** Set only for families listed in the Google Fonts catalogue. */
+  google?: GoogleEntry;
+}
+
+/**
+ * What the catalogue knows about one Google family. A family from the catalogue
+ * has no font file of its own until a style is activated: it is preview only.
+ */
+export interface GoogleEntry {
+  family: string;
+  /** Desktop styles Google ships; empty until the metadata has been fetched. */
+  styles: GoogleStyle[];
+  license: string | null;
+  /** A desktop file of this family is in the library and registered. */
+  installed: boolean;
+  category: string | null;
+  designers: string[];
+  lastModified: string | null;
 }
 
 interface FontStore {
   phase: "scanning" | "ready" | "error";
   scanProgress: ScanProgress;
   googleFontsProgress: GoogleFontsProgress;
+  /** The catalogue: every family Google offers, metadata only. */
+  googleCatalog: GoogleFamily[];
+  /** Style lists and licence names, once a family has been opened. */
+  googleMeta: Record<string, GoogleFamilyInfo | undefined>;
+  /** Cached web fonts per `family|style`, or "loading" while being fetched. */
+  googlePreviews: Record<string, GooglePreviewFile[] | "loading">;
+  googleCacheBytes: number;
   fonts: FontFace[];
   tags: Record<string, string[]>;
   protectedTags: string[];
@@ -257,6 +287,19 @@ interface FontStore {
   setFilterSel: (cols: string[], tags: string[], foundrys?: string[]) => void;
   setArea: (a: AreaKind) => void;
   select: (family: string | null) => void;
+
+  /** Loads the cached catalogue (metadata only, no network). */
+  loadGoogleCatalog: () => Promise<void>;
+  /** Asks Google for new families; that is all the Settings button does. */
+  refreshGoogleCatalog: () => Promise<void>;
+  /** Fetches a family's style list the first time it is opened. */
+  ensureGoogleMeta: (family: string) => Promise<void>;
+  /** Fetches the web fonts of one style for the preview on screen. */
+  ensureGooglePreview: (family: string, style: string) => void;
+  /** Downloads a style's desktop file, installs it and activates it. */
+  installGoogleStyle: (family: string, style: string) => Promise<void>;
+  clearGoogleCache: () => Promise<void>;
+  refreshGoogleCacheSize: () => Promise<void>;
 }
 
 function applyMotionPref(pref: MotionPref) {
@@ -323,7 +366,11 @@ function applyLibrary(
 export const useFontStore = create<FontStore>((set, get) => ({
   phase: "scanning",
   scanProgress: { done: 0, total: 0, families: 0 },
-  googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: null },
+  googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, failed: 0, error: null },
+  googleCatalog: [],
+  googleMeta: {},
+  googlePreviews: {},
+  googleCacheBytes: 0,
   fonts: [],
   tags: {},
   protectedTags: [],
@@ -383,10 +430,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
       set({ scanProgress: e.payload });
     });
     await listen<GoogleFontsProgress>("google-fonts:progress", (e) => {
+      // A catalogue refresh downloads no font files, so a finished refresh is
+      // only a status line: no rescan follows it.
       set({ googleFontsProgress: e.payload });
-      if (e.payload.phase === "ready") {
-        void useFontStore.getState().rescan();
-      }
     });
     try {
       const prefs = (await ipc.getPrefs()) ?? {};
@@ -453,7 +499,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
     let watchTimer: ReturnType<typeof setTimeout> | undefined;
     await listen("fonts:changed", () => {
       const googlePhase = get().googleFontsProgress.phase;
-      if (googlePhase === "checking" || googlePhase === "downloading") return;
+      if (googlePhase === "checking") return;
       clearTimeout(watchTimer);
       watchTimer = setTimeout(() => {
         // Queue a trailing scan even when another scan is in progress.
@@ -534,12 +580,11 @@ export const useFontStore = create<FontStore>((set, get) => ({
       if (finished) {
         applyLibrary(set, get, { fonts: finished, ...metadata });
         if (get().settings.googleFontsEnabled) {
-          void ipc.syncGoogleFonts().then(async () => {
-            await get().rescan();
-            set({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
-          }).catch((error) => {
-            set({ googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: String(error) } });
-          });
+          // The catalogue is instant (a local JSON file); the refresh that
+          // follows is a single request looking for new families. No font file
+          // is downloaded at startup.
+          void get().loadGoogleCatalog().then(() => get().refreshGoogleCatalog());
+          void get().refreshGoogleCacheSize();
         }
         return;
       }
@@ -554,12 +599,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
         favorites: get().favorites, notes: get().notes, trash: get().trash,
       });
       if (get().settings.googleFontsEnabled) {
-        void ipc.syncGoogleFonts().then(async () => {
-          await get().rescan();
-          set({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
-        }).catch((error) => {
-          set({ googleFontsProgress: { phase: "ready", done: 0, total: 0, family: null, downloaded: 0, error: String(error) } });
-        });
+        // Same as above: catalogue from disk, then one background refresh.
+        void get().loadGoogleCatalog().then(() => get().refreshGoogleCatalog());
+        void get().refreshGoogleCacheSize();
       }
     } catch (e) {
       if (myGen !== scanGen) return;
@@ -572,6 +614,103 @@ export const useFontStore = create<FontStore>((set, get) => ({
     ++scanGen;
     set({ phase: "scanning" });
     return scanQueue.request();
+  },
+
+  loadGoogleCatalog: async () => {
+    try {
+      set({ googleCatalog: await ipc.googleCatalog() });
+    } catch {
+      set({ googleCatalog: [] });
+    }
+  },
+
+  refreshGoogleCatalog: async () => {
+    if (!get().settings.googleFontsEnabled) return;
+    try {
+      const added = await ipc.refreshGoogleCatalog();
+      const [catalog, tags, protectedTags] = await Promise.all([
+        ipc.googleCatalog(),
+        ipc.getTags(),
+        ipc.getProtectedTags(),
+      ]);
+      set({ googleCatalog: catalog, tags, protectedTags });
+      toast.success(
+        t("toast.googleCatalogRefreshed"),
+        added > 0 ? t("toast.googleFamiliesAdded", { count: added }) : t("toast.googleCatalogUpToDate"),
+        "install",
+      );
+    } catch (error) {
+      toast.error(t("toast.googleCatalogFailed"), String(error));
+    }
+  },
+
+  ensureGoogleMeta: async (family) => {
+    if (get().googleMeta[family]) return;
+    try {
+      const info = await ipc.googleStyles(family);
+      set({ googleMeta: { ...get().googleMeta, [family]: info } });
+    } catch (error) {
+      // Remember the failure so the card does not retry on every render.
+      set({ googleMeta: { ...get().googleMeta, [family]: { family, license: null, styles: [] } } });
+      toast.error(t("toast.googleStylesFailed"), String(error));
+    }
+  },
+
+  ensureGooglePreview: (family, style) => {
+    const key = googlePreviewKey(family, style);
+    if (get().googlePreviews[key]) return;
+    set({ googlePreviews: { ...get().googlePreviews, [key]: "loading" } });
+    void ipc
+      .googlePreview(family, style)
+      .then((files) => {
+        set({ googlePreviews: { ...get().googlePreviews, [key]: files } });
+      })
+      .catch(() => {
+        // An empty list, not "loading": a family without a web font must not be
+        // requested again on every render.
+        set({ googlePreviews: { ...get().googlePreviews, [key]: [] } });
+      });
+  },
+
+  installGoogleStyle: async (family, style) => {
+    try {
+      const result = await ipc.installGoogleFont(family, [style]);
+      if (result.errors.length > 0) {
+        toast.error(t("toast.googleInstallPartial"), result.errors.join("; "));
+      } else {
+        toast.success(t("toast.googleInstalled", { family }), undefined, "install");
+      }
+      // The web font is no longer needed: the real file takes over from here.
+      forgetGoogleFace(family, style);
+      const previews = { ...get().googlePreviews };
+      delete previews[googlePreviewKey(family, style)];
+      set({ googlePreviews: previews });
+      await get().rescan();
+    } catch (error) {
+      toast.error(t("toast.googleInstallFailed"), String(error));
+    }
+  },
+
+  clearGoogleCache: async () => {
+    try {
+      const freed = await ipc.clearGoogleCache();
+      for (const key of Object.keys(get().googlePreviews)) {
+        const [family, style] = key.split("|");
+        forgetGoogleFace(family, style);
+      }
+      set({ googlePreviews: {}, googleCacheBytes: 0 });
+      toast.success(t("toast.googleCacheCleared"), formatBytes(freed), "delete");
+    } catch (error) {
+      toast.error(t("toast.googleCacheFailed"), String(error));
+    }
+  },
+
+  refreshGoogleCacheSize: async () => {
+    try {
+      set({ googleCacheBytes: await ipc.googleCacheBytes() });
+    } catch {
+      set({ googleCacheBytes: 0 });
+    }
   },
 
   setFamilyActive: async (family, active) => {
@@ -1457,6 +1596,143 @@ export function resolveSampleText(
   return trimmed || familyName;
 }
 
+/** Cache key of one style's preview files. */
+export function googlePreviewKey(family: string, style: string): string {
+  return `${family}|${style}`;
+}
+
+/**
+ * A catalogue family has no font file yet. Its "face" only exists so the whole
+ * card, list and detail machinery keeps working: it carries the style the
+ * preview renders in, and the path marks it as virtual so nothing tries to
+ * install, move or scan it.
+ */
+export function isGoogleVirtualFace(face: FontFace): boolean {
+  return face.path.startsWith("google://");
+}
+
+const GOOGLE_CATEGORY_CLASS: Record<string, Classification> = {
+  "Sans Serif": "sans",
+  Serif: "serif",
+  Monospace: "mono",
+  Display: "display",
+  Handwriting: "script",
+};
+
+export function googleClassification(category: string | null): Classification {
+  return GOOGLE_CATEGORY_CLASS[category ?? ""] ?? "unknown";
+}
+
+/** Catalogue subsets mapped onto the script names the rest of the app uses. */
+const GOOGLE_SCRIPT_ALIASES: Record<string, string> = {
+  latin: "latin",
+  "latin-ext": "latin",
+  cyrillic: "cyrillic",
+  "cyrillic-ext": "cyrillic",
+  greek: "greek",
+  "greek-ext": "greek",
+  vietnamese: "vietnamese",
+  arabic: "arabic",
+  hebrew: "hebrew",
+  devanagari: "devanagari",
+  thai: "thai",
+  japanese: "cjk",
+  "chinese-hongkong": "cjk",
+  "chinese-simplified": "cjk",
+  "chinese-traditional": "cjk",
+  korean: "korean",
+};
+
+export function googleScripts(subsets: string[]): string[] {
+  const out: string[] = [];
+  for (const subset of subsets) {
+    const script = GOOGLE_SCRIPT_ALIASES[subset];
+    if (script && !out.includes(script)) out.push(script);
+  }
+  return out;
+}
+
+/** Style shown before the family's real style list has been fetched. */
+const GOOGLE_FALLBACK_STYLE: GoogleStyle = {
+  key: "400",
+  label: "Regular",
+  weight: 400,
+  italic: false,
+};
+
+function virtualGoogleFace(family: string, style: GoogleStyle): FontFace {
+  return {
+    id: `google:${family}:${style.key}`,
+    path: `google://${family}/${style.key}`,
+    previewPath: null,
+    faceIndex: 0,
+    family,
+    style: style.label,
+    postscriptName: null,
+    foundry: null,
+    designers: [],
+    category: null,
+    license: null,
+    licenseUrl: null,
+    format: "woff2",
+    isVariable: false,
+    axes: [],
+    weight: style.weight,
+    italic: style.italic,
+    monospaced: false,
+    classification: "unknown",
+    scripts: [],
+    fileSize: 0,
+    source: "google",
+    deactivatable: false,
+    active: false,
+  };
+}
+
+/**
+ * The family list of the Google Fonts view. A family whose file is already in
+ * the library is shown as the library family itself, so its styles stay the
+ * real, toggleable ones; every other entry is preview only.
+ */
+export function buildGoogleFamilies(
+  catalog: GoogleFamily[],
+  meta: Record<string, GoogleFamilyInfo | undefined>,
+  local: Map<string, Family>,
+  tags: Record<string, string[]>,
+): Family[] {
+  return catalog.map((entry) => {
+    const installed = local.get(entry.family);
+    const info = meta[entry.family];
+    const styles = info && info.styles.length > 0 ? info.styles : [GOOGLE_FALLBACK_STYLE];
+    const google: GoogleEntry = {
+      family: entry.family,
+      styles: info?.styles ?? [],
+      license: info?.license ?? null,
+      installed: Boolean(installed),
+      category: entry.category ?? null,
+      designers: entry.designers ?? [],
+      lastModified: entry.lastModified ?? null,
+    };
+    if (installed) return { ...installed, google };
+    return {
+      name: entry.family,
+      faces: styles.map((style) => virtualGoogleFace(entry.family, style)),
+      formats: ["woff2"],
+      isVariable: false,
+      active: false,
+      deactivatable: false,
+      tags: tags[entry.family] ?? [],
+      totalSize: 0,
+      foundry: null,
+      designers: entry.designers ?? [],
+      category: entry.category ?? null,
+      classification: googleClassification(entry.category ?? null),
+      scripts: googleScripts(entry.subsets ?? []),
+      google,
+    };
+  });
+}
+
 export function computeFamilies(
   fonts: FontFace[],
   tags: Record<string, string[]>,
@@ -1523,8 +1799,17 @@ export function selectVisibleFamilies(s: {
   selTags: string[];
   selFoundrys?: string[];
   sort: SortMode;
+  googleCatalog?: GoogleFamily[];
+  googleMeta?: Record<string, GoogleFamilyInfo | undefined>;
 }): Family[] {
-  const families = [...familiesFor(s.fonts, s.tags).values()];
+  const local = familiesFor(s.fonts, s.tags);
+  // The Google Fonts view lists the catalogue, every other view the library. A
+  // catalogue family that already has a file in the library is shown as the
+  // library family itself, so its styles stay the real, toggleable ones.
+  const families =
+    s.browse === "googleFonts" && (s.googleCatalog?.length ?? 0) > 0
+      ? buildGoogleFamilies(s.googleCatalog ?? [], s.googleMeta ?? {}, local, s.tags)
+      : [...local.values()];
   const q = s.search.trim().toLowerCase();
   let out = families;
   if (s.classFilter.length > 0) {

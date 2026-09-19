@@ -4,9 +4,10 @@ import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springBouncy, springSnappy, springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
+import { useGoogleCss } from "../lib/googlePreview";
 import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
 import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
-import { activeConflictsFor, conflictsFor, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
+import { activeConflictsFor, conflictsFor, isGoogleVirtualFace, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { playStar, playTag } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
@@ -18,18 +19,27 @@ export function FormatBadge({ format, isVariable }: { format: string; isVariable
 
 function FacePreview({
   face,
+  family,
   text,
   size,
   synthesize,
 }: {
   face: FontFace;
+  /** Catalogue family name, when this style is not installed yet. */
+  family: string;
   text: string;
   size: number;
   synthesize: boolean;
 }) {
   const t = useT();
-  const { fontFamily, failed } = useFontCss(face);
+  const virtual = isGoogleVirtualFace(face);
+  const google = useGoogleCss(virtual ? family : "", virtual ? face.id.split(":").pop() ?? "400" : "");
+  const local = useFontCss(virtual ? null : face);
+  const fontFamily = virtual ? google.fontFamily : local.fontFamily;
+  const failed = virtual ? google.failed : local.failed;
   const setFontFileActive = useFontStore((s) => s.setFontFileActive);
+  const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
+  const styleKey = face.id.split(":").pop() ?? "400";
   return (
     <div className="face-row">
       <span className="face-style">{face.style}</span>
@@ -55,10 +65,20 @@ function FacePreview({
       )}
       <span className="face-toggle">
         <PillToggle
-          on={face.active}
-          disabled={!face.deactivatable}
-          onChange={(on) => void setFontFileActive(face.path, on)}
-          label={t(face.active ? "card.deactivate" : "card.activate", { name: face.style })}
+          on={virtual ? false : face.active}
+          disabled={!virtual && !face.deactivatable}
+          onChange={(on) => {
+            // A catalogue style has no file yet: switching it on downloads the
+            // desktop font and activates it in one step.
+            if (virtual) {
+              if (on) void installGoogleStyle(family, styleKey);
+              return;
+            }
+            void setFontFileActive(face.path, on);
+          }}
+          label={t(virtual ? "card.googleActivateStyle" : face.active ? "card.deactivate" : "card.activate", {
+            name: face.style,
+          })}
         />
       </span>
     </div>
@@ -94,8 +114,20 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
 
   const size = SIZES[sizeIndex];
   const lead = family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
-  const { fontFamily, failed } = useFontCss(lead);
+  // A catalogue family is previewed from its web fonts; once a style is
+  // installed the ordinary local files take over.
+  const catalogue = family.google && !family.google.installed ? family.google : null;
+  const google = useGoogleCss(catalogue?.family ?? "", catalogue?.styles[0]?.key ?? "400");
+  const local = useFontCss(catalogue ? null : lead);
+  const fontFamily = catalogue ? google.fontFamily : local.fontFamily;
+  const failed = catalogue ? google.failed : local.failed;
   const text = resolveSampleText(sampleText, sampleUseFontName, family.name);
+  const ensureGoogleMeta = useFontStore((s) => s.ensureGoogleMeta);
+  // The style list is fetched when the card is opened, never while scrolling:
+  // that would be one request per visible card.
+  useEffect(() => {
+    if (expanded && catalogue) void ensureGoogleMeta(catalogue.family);
+  }, [expanded, catalogue, ensureGoogleMeta]);
 
   return (
     <article
@@ -119,8 +151,9 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
         st.selectWith(family.name, mode, st.visibleOrder);
         // Single-face families have no style list to open — clicking only
-        // selects them, it never expands.
-        if (family.faces.length > 1) setExpanded((v) => !v);
+        // selects them, it never expands. A catalogue family always opens: its
+        // style list arrives with the metadata.
+        if (family.faces.length > 1 || family.google) setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
@@ -196,7 +229,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         >
           + {t("card.addTag")}
         </button>
-        {family.faces.length > 1 && (
+        {(family.faces.length > 1 || family.google) && (
           <motion.button
             className="card-expand"
             aria-label={t(expanded ? "card.collapseStyles" : "card.expandStyles")}
@@ -247,12 +280,16 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             </span>
           )
         )}
-        <PillToggle
-          on={family.active}
-          disabled={!family.deactivatable}
-          onChange={(on) => void setFamilyActive(family.name, on)}
-          label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
-        />
+        {/* A catalogue family has no family-wide switch: each style is
+            installed on its own, from the style list. */}
+        {!catalogue && (
+          <PillToggle
+            on={family.active}
+            disabled={!family.deactivatable}
+            onChange={(on) => void setFamilyActive(family.name, on)}
+            label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
+          />
+        )}
       </header>
 
       <div className="card-preview" style={{ minHeight: size * 1.35 }}>
@@ -300,6 +337,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
               <FacePreview
                 key={face.id}
                 face={face}
+                family={family.google?.family ?? family.name}
                 text={text}
                 size={size}
                 synthesize={family.faces.filter((f) => f.path === face.path).length > 1}

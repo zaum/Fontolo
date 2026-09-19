@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
 import { useFontCss, formatBytes, pathBasename } from "../lib/fontLoader";
-import { familiesFor, conflictsFor, resolveSampleText, useFontStore } from "../state/fontStore";
+import { familiesFor, conflictsFor, isGoogleVirtualFace, resolveSampleText, useFontStore } from "../state/fontStore";
+import { useGoogleCss } from "../lib/googlePreview";
 import { ipc, type FontFace, type VariationAxis } from "../lib/ipc";
 import { toast } from "../design/primitives/Toast";
 import { FormatBadge } from "./FamilyCard";
@@ -30,7 +31,12 @@ function StyleRow({
   synthesize: boolean;
 }) {
   const t = useT();
-  const { fontFamily } = useFontCss(face);
+  const virtual = isGoogleVirtualFace(face);
+  const google = useGoogleCss(virtual ? family : "", virtual ? face.id.split(":").pop() ?? "400" : "");
+  const localCss = useFontCss(virtual ? null : face);
+  const fontFamily = virtual ? google.fontFamily : localCss.fontFamily;
+  const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
+  const styleKey = face.id.split(":").pop() ?? "400";
   return (
     <motion.button
       className={`style-row ${selected ? "style-selected" : ""}`}
@@ -49,25 +55,46 @@ function StyleRow({
         {face.style}
       </span>
       <span className="style-fmt">{face.format.toUpperCase()}</span>
-      <motion.span
-        role="button"
-        tabIndex={0}
-        className="style-export"
-        aria-label={t("detail.exportFace", { family, style: face.style })}
-        onClick={(e) => {
-          e.stopPropagation();
-          void exportFace(face.path, pathBasename(face.path));
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+      {virtual ? (
+        <span
+          className="style-toggle"
+          role="button"
+          tabIndex={0}
+          aria-label={t("card.googleActivateStyle", { name: face.style })}
+          onClick={(e) => {
+            e.stopPropagation();
+            void installGoogleStyle(family, styleKey);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+              void installGoogleStyle(family, styleKey);
+            }
+          }}
+        >
+          <Download size={13} strokeWidth={1.5} />
+        </span>
+      ) : (
+        <motion.span
+          role="button"
+          tabIndex={0}
+          className="style-export"
+          aria-label={t("detail.exportFace", { family, style: face.style })}
+          onClick={(e) => {
             e.stopPropagation();
             void exportFace(face.path, pathBasename(face.path));
-          }
-        }}
-        whileTap={{ scale: 0.9 }}
-      >
-        <Download size={13} strokeWidth={1.5} />
-      </motion.span>
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+              void exportFace(face.path, pathBasename(face.path));
+            }
+          }}
+          whileTap={{ scale: 0.9 }}
+        >
+          <Download size={13} strokeWidth={1.5} />
+        </motion.span>
+      )}
     </motion.button>
   );
 }
@@ -561,8 +588,22 @@ export function DetailPanel() {
     family?.faces.find((f) => f.style === "Regular") ??
     family?.faces[0] ??
     null;
-  const { fontFamily } = useFontCss(lead);
+  // A family straight from the Google catalogue has no file yet: it renders
+  // from web fonts fetched on demand, and its details are not there to inspect.
+  const catalogue = family?.google && !family.google.installed ? family.google : null;
+  const catalogueStyle =
+    lead && isGoogleVirtualFace(lead)
+      ? lead.id.split(":").pop() ?? "400"
+      : catalogue?.styles[0]?.key ?? "400";
+  const google = useGoogleCss(catalogue?.family ?? "", catalogueStyle);
+  const localCss = useFontCss(catalogue ? null : lead);
+  const fontFamily = catalogue ? google.fontFamily : localCss.fontFamily;
   const text = family ? resolveSampleText(sampleText, sampleUseFontName, family.name) : "";
+  const ensureGoogleMeta = useFontStore((s) => s.ensureGoogleMeta);
+
+  useEffect(() => {
+    if (catalogue) void ensureGoogleMeta(catalogue.family);
+  }, [catalogue, ensureGoogleMeta]);
 
   useEffect(() => {
     setFeatures([]);
@@ -595,7 +636,9 @@ export function DetailPanel() {
           .map((a) => `"${a.tag}" ${axisValues[a.tag] ?? a.default}`)
           .join(", ")
       : undefined;
-  const canUninstall = family?.faces.some((f) => f.source !== "system") ?? false;
+  // A preview-only catalogue entry has nothing to uninstall.
+  const canUninstall =
+    family?.faces.some((f) => f.source !== "system" && !isGoogleVirtualFace(f)) ?? false;
 
   return (
     <AnimatePresence>
@@ -690,24 +733,28 @@ export function DetailPanel() {
               </span>
             </motion.section>
 
-            <motion.section
-              className="detail-activate"
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-            >
-              <div>
-                <div className="activate-label">{t(family.active ? "detail.active" : "detail.inactive")}</div>
-                <div className="activate-sub">
-                  {t(family.deactivatable ? "detail.visibleElsewhere" : "detail.systemFont")}
+            {/* A catalogue family has no family-wide switch: every style is
+                installed on its own, from the style list below. */}
+            {!catalogue && (
+              <motion.section
+                className="detail-activate"
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
+              >
+                <div>
+                  <div className="activate-label">{t(family.active ? "detail.active" : "detail.inactive")}</div>
+                  <div className="activate-sub">
+                    {t(family.deactivatable ? "detail.visibleElsewhere" : "detail.systemFont")}
+                  </div>
                 </div>
-              </div>
-              <PillToggle
-                on={family.active}
-                disabled={!family.deactivatable}
-                onChange={(on) => void setFamilyActive(family.name, on)}
-                label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
-                size="lg"
-              />
-            </motion.section>
+                <PillToggle
+                  on={family.active}
+                  disabled={!family.deactivatable}
+                  onChange={(on) => void setFamilyActive(family.name, on)}
+                  label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
+                  size="lg"
+                />
+              </motion.section>
+            )}
 
             <motion.section
               className="detail-waterfall"
@@ -877,24 +924,36 @@ export function DetailPanel() {
               </motion.section>
             )}
 
-            <motion.section
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-            >
-              <div className="detail-heading detail-heading-row">
-                <span>{t("detail.glyphs")}</span>
-                <span className="detail-heading-note">
-                  <Copy size={10} strokeWidth={1.5} /> {t("detail.clickToCopy")}
-                </span>
-              </div>
-              <GlyphMap face={lead} fontFamily={fontFamily} variation={variation} />
-            </motion.section>
+            {catalogue ? (
+              <motion.section
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
+              >
+                <div className="detail-heading">{t("detail.googlePreviewOnly")}</div>
+                <p className="detail-hint">{t("detail.googleNotInstalled")}</p>
+              </motion.section>
+            ) : (
+              <motion.section
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
+              >
+                <div className="detail-heading detail-heading-row">
+                  <span>{t("detail.glyphs")}</span>
+                  <span className="detail-heading-note">
+                    <Copy size={10} strokeWidth={1.5} /> {t("detail.clickToCopy")}
+                  </span>
+                </div>
+                <GlyphMap face={lead} fontFamily={fontFamily} variation={variation} />
+              </motion.section>
+            )}
 
-            {(lead.license || lead.licenseUrl) && (
+            {(lead.license || lead.licenseUrl || catalogue?.license) && (
               <motion.section
                 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
               >
                 <div className="detail-heading">{t("detail.license")}</div>
-                <LicenseSection license={lead.license} licenseUrl={lead.licenseUrl} />
+                <LicenseSection
+                  license={catalogue?.license ?? lead.license}
+                  licenseUrl={lead.licenseUrl}
+                />
               </motion.section>
             )}
 

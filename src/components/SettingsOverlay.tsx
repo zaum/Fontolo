@@ -13,6 +13,7 @@ import {
   MessageSquarePlus,
   Palette,
   SunMoon,
+  Trash2,
   Volume2,
   X,
   Globe2,
@@ -25,6 +26,7 @@ import { PillToggle } from "../design/primitives/PillToggle";
 import { ACCENT_PRESETS, DEFAULT_ACCENT } from "../lib/accent";
 import { springSoft } from "../design/springs";
 import { ipc } from "../lib/ipc";
+import { formatBytes } from "../lib/fontLoader";
 import { useFontStore } from "../state/fontStore";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { useT } from "../lib/i18n";
@@ -83,17 +85,21 @@ export function SettingsOverlay() {
   const affinityConnection = useFontStore((s) => s.affinityConnection);
   const refreshAffinityConnection = useFontStore((s) => s.refreshAffinityConnection);
 
-  const syncGoogleFonts = () => {
-    void ipc.syncGoogleFonts().then(async () => {
-      const store = useFontStore.getState();
-      await store.rescan();
-      useFontStore.setState({ tags: await ipc.getTags(), protectedTags: await ipc.getProtectedTags() });
-    }).catch(() => {});
+  const googleCacheBytes = useFontStore((s) => s.googleCacheBytes);
+  const refreshGoogleCacheSize = useFontStore((s) => s.refreshGoogleCacheSize);
+  const clearGoogleCache = useFontStore((s) => s.clearGoogleCache);
+
+  // Metadata only: a refresh checks the catalogue for new families, it does not
+  // download a single font file.
+  const refreshCatalog = () => {
+    void useFontStore.getState().refreshGoogleCatalog();
   };
 
   useEffect(() => {
-    if (openState) void refreshAffinityConnection();
-  }, [openState, refreshAffinityConnection]);
+    if (!openState) return;
+    void refreshGoogleCacheSize();
+    void refreshAffinityConnection();
+  }, [openState, refreshAffinityConnection, refreshGoogleCacheSize]);
 
   useEffect(() => {
     if (!openState || defaultLibDir) return;
@@ -403,23 +409,41 @@ export function SettingsOverlay() {
                           on={settings.googleFontsEnabled}
                           onChange={(on) => {
                             void updateSettings({ ...settings, googleFontsEnabled: on });
-                            if (on) syncGoogleFonts();
+                            if (on) refreshCatalog();
                           }}
                           label={t("settings.googleFontsEnable")}
                         />
                       </div>
                       <div className="settings-row">
                         <div>
-                          <div className="settings-label">{t("settings.googleFontsSync")}</div>
+                          <div className="settings-label">{t("settings.googleFontsRefresh")}</div>
                           <div className="settings-sub">
-                            {googleFontsProgress.phase === "downloading" && googleFontsProgress.total > 0
-                              ? t("settings.googleFontsProgress", { done: googleFontsProgress.done, total: googleFontsProgress.total })
-                              : t("settings.googleFontsSyncSub")}
+                            {googleFontsProgress.phase === "checking"
+                              ? t("settings.googleFontsChecking")
+                              : googleFontsProgress.error
+                                ? googleFontsProgress.error
+                                : t("settings.googleFontsRefreshSub")}
                           </div>
                         </div>
-                        <button className="settings-data-btn" onClick={syncGoogleFonts} disabled={!settings.googleFontsEnabled || googleFontsProgress.phase === "downloading"}>
-                          <RefreshCw size={13} strokeWidth={1.5} className={googleFontsProgress.phase === "downloading" ? "settings-scanning-icon" : undefined} />
-                          {t("settings.googleFontsSync")}
+                        <button
+                          className="settings-data-btn"
+                          onClick={refreshCatalog}
+                          disabled={!settings.googleFontsEnabled || googleFontsProgress.phase === "checking"}
+                        >
+                          <RefreshCw size={13} strokeWidth={1.5} className={googleFontsProgress.phase === "checking" ? "settings-scanning-icon" : undefined} />
+                          {t("settings.googleFontsRefresh")}
+                        </button>
+                      </div>
+                      <div className="settings-row">
+                        <div>
+                          <div className="settings-label">{t("settings.googleFontsCache")}</div>
+                          <div className="settings-sub">
+                            {t("settings.googleFontsCacheSub", { size: formatBytes(googleCacheBytes) })}
+                          </div>
+                        </div>
+                        <button className="settings-data-btn" onClick={() => void clearGoogleCache()} disabled={googleCacheBytes === 0}>
+                          <Trash2 size={13} strokeWidth={1.5} />
+                          {t("settings.googleFontsCacheClear")}
                         </button>
                       </div>
                     </section>

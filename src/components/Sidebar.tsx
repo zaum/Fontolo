@@ -174,6 +174,7 @@ export function Sidebar() {
   const favorites = useFontStore((s) => s.favorites);
   const lastImported = useFontStore((s) => s.lastImported);
   const trash = useFontStore((s) => s.trash);
+  const googleCatalog = useFontStore((s) => s.googleCatalog);
   const googleFontsProgress = useFontStore((s) => s.googleFontsProgress);
   const scanProgress = useFontStore((s) => s.scanProgress);
   const scanning = useFontStore((s) => s.phase === "scanning");
@@ -210,7 +211,11 @@ export function Sidebar() {
   const systemCount = allFamilies.filter(
     (f) => f.faces.length > 0 && f.faces.every((face) => face.source === "system"),
   ).length;
-  const googleFontsCount = allFamilies.filter((f) => f.faces.some((face) => face.source === "google")).length;
+  // The Google entry counts families in the catalogue; the ones already
+  // installed into the library are marked with their own metadata.
+  const googleFontsCount = googleCatalog.length > 0
+    ? googleCatalog.length
+    : allFamilies.filter((f) => f.faces.some((face) => face.source === "google")).length;
   const tagCounts = allTags(tags);
   const foundryCounts = allFoundryCounts(fonts, tags);
   // Foundries with more than one family come first (largest count first),
@@ -565,12 +570,12 @@ export function Sidebar() {
           onPick={() => pickBrowse("googleFonts")}
           icon={<Globe2 size={15} strokeWidth={1.5} />}
           label={t("side.googleFonts")}
-          count={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"
+          count={googleFontsProgress.phase === "checking"
             ? googleFontsProgress.done
             : googleFontsCount}
           index={i++}
-          related={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
-          pulsing={googleFontsProgress.phase === "downloading" || googleFontsProgress.phase === "checking"}
+          related={googleFontsProgress.phase === "checking"}
+          pulsing={googleFontsProgress.phase === "checking"}
         />
           </motion.div>
         )}

@@ -1,3 +1,19 @@
+### <sup><sub style="font-size: 0.7em;">2026-09-19</sub></sup> · 🐛 Fixes · Google Fonts Rebuilt as a Two-Stage Provider
+
+* Diagnosed why the catalogue download always stopped inside the "B" families: Google's gstatic file names reach 238 characters, and the old naming scheme prefixed them with the family name, producing a 316-character path that no Windows path can hold. The first failing family (`Bitcount Grid Double Ink`) aborted the whole sync, and because the manifest was only written at the very end, every retry started from scratch and died at the same place.
+* Rebuilt Google Fonts as two stages: browsing is metadata only (the lightweight catalogue JSON), and the styles on screen fetch a few kilobytes of WOFF2 web font on demand into a dedicated preview cache that is never scanned as a library.
+* Activation now downloads the full desktop TTF/OTF of a style into the ordinary library folder and registers it with the system, so Photoshop, Figma and Word see it on Linux, Windows and macOS; an installed family keeps its real, toggleable styles.
+* Reduced the Settings sync button to a single metadata request that reports how many families are new — it no longer downloads anything.
+* Made downloads resilient: per-family progress persistence, isolated errors that no longer abort the sync, and retries with backoff for rate limits and server errors.
+* Removed the family-wide toggle on catalogue families and let each style's existing activate button download, install and activate that style in one step.
+* Hid glyph map, OpenType features and character set for preview-only families, showing a hint that activation reveals the details.
+* Showed the catalogue count in the sidebar and added a preview-cache size with a clear-cache control to Settings; all nine locales were extended and re-verified.
+* Added unit tests for the safe file naming (including the 238-character gstatic name that broke the download), CSS block parsing and `METADATA.pb` style parsing. Verified TypeScript, cargo check, all Rust and Node tests, and the locale check on Windows; Linux and macOS runtime checks were not performed.
+
+`Uncommitted` · `working tree`
+
+---
+
 <sup><sub style="font-size: 0.7em;">2026-09-18</sub></sup> · 🛠️ Maintenance · Affinity probe robustness, settings order, and reqwest TLS backend
 
 * Moved the Affinity enable toggle above the connection row so users can turn the integration on before reading its status.

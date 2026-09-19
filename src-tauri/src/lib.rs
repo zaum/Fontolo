@@ -148,10 +148,20 @@ async fn scan_all_faces(app: &tauri::AppHandle) -> Result<Vec<FontFace>, String>
     if state.linked.len() != before {
         let _ = store::save(&state);
     }
+    if google_fonts::retain_installed(&mut state) {
+        let _ = store::save(&state);
+    }
     google_fonts::decorate_faces(&mut faces);
     let mut faces: Vec<FontFace> = faces
         .into_iter()
         .map(|mut f| {
+            // A Google font installed from the catalogue lives in the ordinary
+            // library folder, so the folder cannot say where it came from: the
+            // recorded path does. (The file has to be there - on macOS a font
+            // in any other directory is invisible to the system.)
+            if google_fonts::is_installed_path(&state, &f.path) {
+                f.source = FontSource::Google;
+            }
             f.active = activation::is_active(&probe, &state, &f);
             f
         })
@@ -864,9 +874,56 @@ async fn apply_font_in_app(
         .map_err(|e| e.to_string())?
 }
 
+/// The catalogue: every family Google Fonts offers, metadata only. Browsing it
+/// costs no download at all.
 #[tauri::command]
-async fn sync_google_fonts(app: tauri::AppHandle) -> Result<(), String> {
-    google_fonts::sync(app).await
+fn google_catalog() -> Vec<google_fonts::GoogleFontFamily> {
+    google_fonts::catalog()
+}
+
+/// Checks the catalogue for new families. Returns how many were added.
+#[tauri::command]
+async fn refresh_google_catalog(app: tauri::AppHandle) -> Result<usize, String> {
+    google_fonts::refresh(app).await
+}
+
+/// The desktop styles of one family, with its licence name.
+#[tauri::command]
+async fn google_styles(
+    app: tauri::AppHandle,
+    family: String,
+) -> Result<google_fonts::GoogleFamilyInfo, String> {
+    google_fonts::styles(&app, &family).await
+}
+
+/// Web fonts for the preview on screen, fetched on demand and cached.
+#[tauri::command]
+async fn google_preview(
+    app: tauri::AppHandle,
+    family: String,
+    style: String,
+) -> Result<Vec<google_fonts::PreviewFile>, String> {
+    google_fonts::preview(app, family, style).await
+}
+
+/// Installs a style's desktop file into the library and activates it.
+#[tauri::command]
+async fn install_google_font(
+    app: tauri::AppHandle,
+    family: String,
+    styles: Vec<String>,
+) -> Result<google_fonts::GoogleInstallResult, String> {
+    google_fonts::install(app, family, styles).await
+}
+
+#[tauri::command]
+fn google_cache_bytes() -> u64 {
+    google_fonts::cache_bytes()
+}
+
+#[tauri::command]
+fn clear_google_cache() -> Result<u64, String> {
+    google_fonts::clear_cache()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -887,6 +944,13 @@ pub fn run() {
         .manage(watcher::WatchHandle(std::sync::Mutex::new(None)))
         .setup(move |app| {
             allow_previews(app.handle(), &extra_dirs);
+            // The preview cache is served to the webview through the asset
+            // protocol, so its folder has to be in scope.
+            allow_dir(app.handle(), &google_fonts::preview_dir());
+            // Clean up the version 1 Google Fonts mirror in the background: it
+            // had downloaded a full TTF per family just to draw previews.
+            let migrate_app = app.handle().clone();
+            std::thread::spawn(move || google_fonts::migrate(&migrate_app));
             allow_dir(
                 app.handle(),
                 &scanner::effective_managed_dir(library_dir.as_deref()),
@@ -956,8 +1020,14 @@ pub fn run() {
             set_settings,
             default_library_dir,
             adobe_available,
-            apply_font_in_app
-            ,sync_google_fonts
+            apply_font_in_app,
+            google_catalog,
+            refresh_google_catalog,
+            google_styles,
+            google_preview,
+            install_google_font,
+            google_cache_bytes,
+            clear_google_cache
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

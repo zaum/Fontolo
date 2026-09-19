@@ -2219,6 +2219,21 @@
   background: var(--e2);
   color: var(--accent-a);
 }
+/* Install affordance of a catalogue style: visible whenever the row is,
+   because this is the only way to bring that style into the library. */
+.style-toggle {
+  display: grid;
+  place-items: center;
+  padding: 5px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  transition: background var(--t-quick) ease, color var(--t-quick) ease;
+}
+.style-toggle:hover,
+.style-toggle:focus-visible {
+  background: var(--e2);
+  color: var(--accent-a);
+}
 
 .pill-toggle {
   cursor: pointer;
@@ -2767,6 +2782,12 @@
   font-size: var(--fs-11);
   color: var(--text-secondary);
   line-height: 1.5;
+}
+/* Shown where a catalogue family has nothing local to inspect yet. */
+.detail-hint {
+  font-size: var(--fs-12);
+  color: var(--text-secondary);
+  line-height: 1.55;
 }
 .conflict-group {
   display: flex;

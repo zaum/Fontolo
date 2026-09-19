@@ -2,7 +2,7 @@
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import type { FontFace as ZFontFace } from "./ipc";
+import type { FontFace as ZFontFace, GooglePreviewFile } from "./ipc";
 
 type LoadState = "loading" | "loaded" | "failed";
 interface CacheEntry {
@@ -60,30 +60,43 @@ function evictIfNeeded(): void {
     if (oldest === undefined) break;
     const entry = cache.get(oldest);
     cache.delete(oldest);
-    // Release the webfont so the browser can free its glyph raster cache.
+    // Release the webfont so the browser can free its glyph raster cache. One
+    // family can consist of several faces (one per Unicode range), so all of
+    // them have to go.
     if (entry?.state === "loaded") {
       const css = oldest;
-      for (const ff of document.fonts) {
-        if (ff.family === css) {
-          document.fonts.delete(ff);
-          break;
-        }
+      for (const ff of [...document.fonts]) {
+        if (ff.family === css) document.fonts.delete(ff);
       }
     }
   }
 }
 
-function ensureLoaded(face: ZFontFace): void {
-  const name = cssName(face);
+/** One file of a preview: a cached web font and the ranges it covers. */
+export interface PreviewSource {
+  url: string;
+  unicodeRange?: string;
+}
+
+/**
+ * Registers one family from a list of files. Several files under the same name
+ * is exactly how a webfont family works: each carries its own `unicode-range`,
+ * so ASCII comes from the `latin` cut while Hungarian accented letters come
+ * from `latin-ext`. Loading only one of them would show tofu boxes.
+ */
+function ensureSources(name: string, sources: PreviewSource[]): void {
+  if (sources.length === 0) return;
   if (getState(name) !== undefined) return;
   cache.set(name, { state: "loading", lastUsed: Date.now() });
   evictIfNeeded();
 
-  const url = convertFileSrc(face.previewPath ?? face.path);
-  const ff = new FontFace(name, `url("${url}")`);
-  ff.load()
-    .then(() => {
-      document.fonts.add(ff);
+  const faces = sources.map((source) => {
+    const descriptors = source.unicodeRange ? { unicodeRange: source.unicodeRange } : undefined;
+    return new FontFace(name, `url("${source.url}")`, descriptors);
+  });
+  Promise.all(faces.map((face) => face.load()))
+    .then((loaded) => {
+      for (const face of loaded) document.fonts.add(face);
       cache.set(name, { state: "loaded", lastUsed: Date.now() });
     })
     .catch(() => {
@@ -93,6 +106,11 @@ function ensureLoaded(face: ZFontFace): void {
       listeners.get(name)?.forEach((fn) => fn());
       listeners.delete(name);
     });
+}
+
+function ensureLoaded(face: ZFontFace): void {
+  const name = cssName(face);
+  ensureSources(name, [{ url: convertFileSrc(face.previewPath ?? face.path) }]);
 }
 
 export function useFontCss(face: ZFontFace | null): {
@@ -147,4 +165,60 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// --- Google Fonts previews -------------------------------------------------
+
+/** The CSS family name a Google style is registered under. */
+export function googleFaceName(family: string, style: string): string {
+  return `zfm-google-${hash(`${family}|${style}`)}`;
+}
+
+/**
+ * Loads the cached web fonts of one Google style. `files` is what the store
+ * fetched for this style; until they arrive nothing is registered, and once
+ * they do the family renders with the Unicode ranges the provider declares.
+ */
+export function useGoogleFaceCss(
+  family: string,
+  style: string,
+  files: GooglePreviewFile[] | null,
+): { fontFamily: string | null; failed: boolean } {
+  const name = googleFaceName(family, style);
+  const [, bump] = useState(0);
+
+  useEffect(() => {
+    if (!files || files.length === 0) return;
+    ensureSources(
+      name,
+      files.map((file) => ({
+        url: convertFileSrc(file.path),
+        unicodeRange: file.unicodeRange,
+      })),
+    );
+    if (getState(name) === "loading") {
+      const set = listeners.get(name) ?? new Set();
+      const fn = () => bump((n) => n + 1);
+      set.add(fn);
+      listeners.set(name, set);
+      return () => {
+        set.delete(fn);
+      };
+    }
+  }, [name, files]);
+
+  const state = getState(name);
+  return {
+    fontFamily: state === "loaded" ? name : null,
+    failed: state === "failed",
+  };
+}
+
+/** Drops a cached Google preview, so the next render fetches it again. */
+export function forgetGoogleFace(family: string, style: string): void {
+  const name = googleFaceName(family, style);
+  cache.delete(name);
+  for (const ff of [...document.fonts]) {
+    if (ff.family === name) document.fonts.delete(ff);
+  }
 }
