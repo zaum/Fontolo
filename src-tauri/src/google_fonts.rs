@@ -815,11 +815,24 @@ pub async fn install(
         }
         crate::store::save(&state)?;
     }
-    let _ = app.emit("fonts:changed", ());
-    let faces: Vec<FontFace> = paths
+    // The frontend rescans explicitly after this call; emitting `fonts:changed`
+    // here would schedule a second full scan of the library.
+    let mut faces: Vec<FontFace> = paths
         .iter()
         .flat_map(|path| crate::parser::parse_font_file(Path::new(path), FontSource::Google))
         .collect();
+    // The store used to rescan to learn about the new files. It merges them
+    // now, so these have to look like a scan result already: catalogue
+    // metadata on top, and the registration state written just above.
+    decorate_faces(&mut faces);
+    let probe = crate::activation::probe();
+    {
+        let store: State<Store> = app.state();
+        let state = store.0.lock().map_err(|e| e.to_string())?;
+        for face in &mut faces {
+            face.active = crate::activation::is_active(&probe, &state, face);
+        }
+    }
     Ok(GoogleInstallResult {
         faces,
         installed: paths,

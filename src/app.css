@@ -2234,6 +2234,15 @@
   background: var(--e2);
   color: var(--accent-a);
 }
+.style-toggle-busy {
+  color: var(--accent-a);
+  pointer-events: none;
+  animation: style-toggle-pulse 1s ease-in-out infinite;
+}
+@keyframes style-toggle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 
 .pill-toggle {
   cursor: pointer;

@@ -7,7 +7,7 @@ import { useFontCss } from "../lib/fontLoader";
 import { useGoogleCss } from "../lib/googlePreview";
 import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
 import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
-import { activeConflictsFor, conflictsFor, isGoogleVirtualFace, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
+import { activeConflictsFor, conflictsFor, googlePreviewKey, isGoogleVirtualFace, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { playStar, playTag } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
@@ -40,6 +40,8 @@ function FacePreview({
   const setFontFileActive = useFontStore((s) => s.setFontFileActive);
   const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
   const styleKey = face.id.split(":").pop() ?? "400";
+  // While the desktop file is on its way, the switch already reads as on.
+  const installing = useFontStore((s) => Boolean(s.googleInstalling[googlePreviewKey(family, styleKey)]));
   return (
     <div className="face-row">
       <span className="face-style">{face.style}</span>
@@ -65,8 +67,8 @@ function FacePreview({
       )}
       <span className="face-toggle">
         <PillToggle
-          on={virtual ? false : face.active}
-          disabled={!virtual && !face.deactivatable}
+          on={virtual ? installing || face.active : face.active}
+          disabled={virtual ? installing : !face.deactivatable}
           onChange={(on) => {
             // A catalogue style has no file yet: switching it on downloads the
             // desktop font and activates it in one step.

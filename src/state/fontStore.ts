@@ -157,6 +157,8 @@ interface FontStore {
   googleMeta: Record<string, GoogleFamilyInfo | undefined>;
   /** Cached web fonts per `family|style`, or "loading" while being fetched. */
   googlePreviews: Record<string, GooglePreviewFile[] | "loading">;
+  /** Styles currently being downloaded and installed. */
+  googleInstalling: Record<string, true>;
   googleCacheBytes: number;
   fonts: FontFace[];
   tags: Record<string, string[]>;
@@ -370,6 +372,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   googleCatalog: [],
   googleMeta: {},
   googlePreviews: {},
+  googleInstalling: {},
   googleCacheBytes: 0,
   fonts: [],
   tags: {},
@@ -673,21 +676,45 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   installGoogleStyle: async (family, style) => {
+    const key = googlePreviewKey(family, style);
+    // One install per style at a time; a second click is a no-op.
+    if (get().googleInstalling[key]) return;
+    set({ googleInstalling: { ...get().googleInstalling, [key]: true } });
     try {
       const result = await ipc.installGoogleFont(family, [style]);
+      // The web font is no longer needed: the real file takes over from here.
+      forgetGoogleFace(family, style);
+      const previews = { ...get().googlePreviews };
+      delete previews[key];
+      set({ googlePreviews: previews });
       if (result.errors.length > 0) {
         toast.error(t("toast.googleInstallPartial"), result.errors.join("; "));
       } else {
         toast.success(t("toast.googleInstalled", { family }), undefined, "install");
       }
-      // The web font is no longer needed: the real file takes over from here.
-      forgetGoogleFace(family, style);
-      const previews = { ...get().googlePreviews };
-      delete previews[googlePreviewKey(family, style)];
-      set({ googlePreviews: previews });
-      await get().rescan();
+      // No rescan: the new file is known, parsed and stamped by the backend,
+      // and the watcher only fires for files it did not see it create.
+      if (result.faces.length > 0) {
+        const mine = new Set(result.installed);
+        const rest = get().fonts.filter((f) => !mine.has(f.path));
+        applyLibrary(set, get, {
+          fonts: [...rest, ...result.faces],
+          tags: get().tags,
+          collections: get().collections,
+          favorites: get().favorites,
+          notes: get().notes,
+          trash: get().trash,
+        });
+      }
+      // Tags may have grown (Google Fonts and the category tags), so refresh
+      // them without touching the library.
+      void ipc.getTags().then((tags) => set({ tags })).catch(() => {});
     } catch (error) {
       toast.error(t("toast.googleInstallFailed"), String(error));
+    } finally {
+      const pending = { ...get().googleInstalling };
+      delete pending[key];
+      set({ googleInstalling: pending });
     }
   },
 

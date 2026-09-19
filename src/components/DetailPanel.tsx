@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
 import { useFontCss, formatBytes, pathBasename } from "../lib/fontLoader";
-import { familiesFor, conflictsFor, isGoogleVirtualFace, resolveSampleText, useFontStore } from "../state/fontStore";
+import { familiesFor, conflictsFor, googlePreviewKey, isGoogleVirtualFace, resolveSampleText, useFontStore } from "../state/fontStore";
 import { useGoogleCss } from "../lib/googlePreview";
 import { ipc, type FontFace, type VariationAxis } from "../lib/ipc";
 import { toast } from "../design/primitives/Toast";
@@ -37,6 +37,7 @@ function StyleRow({
   const fontFamily = virtual ? google.fontFamily : localCss.fontFamily;
   const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
   const styleKey = face.id.split(":").pop() ?? "400";
+  const installing = useFontStore((s) => Boolean(s.googleInstalling[googlePreviewKey(family, styleKey)]));
   return (
     <motion.button
       className={`style-row ${selected ? "style-selected" : ""}`}
@@ -57,10 +58,11 @@ function StyleRow({
       <span className="style-fmt">{face.format.toUpperCase()}</span>
       {virtual ? (
         <span
-          className="style-toggle"
+          className={`style-toggle${installing ? " style-toggle-busy" : ""}`}
           role="button"
-          tabIndex={0}
+          tabIndex={installing ? -1 : 0}
           aria-label={t("card.googleActivateStyle", { name: face.style })}
+          aria-disabled={installing}
           onClick={(e) => {
             e.stopPropagation();
             void installGoogleStyle(family, styleKey);
