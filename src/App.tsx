@@ -194,7 +194,11 @@ export default function App() {
   useEffect(() => {
     void init();
 
-    void getCurrentWindow().show();
+    const window = getCurrentWindow();
+    void window.unminimize();
+    void window.show();
+    void window.center();
+    void window.setFocus();
   }, [init]);
 
   useEffect(() => {

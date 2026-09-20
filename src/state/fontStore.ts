@@ -490,7 +490,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
                 Math.max(SIDEBAR_WIDTH_MIN, prefs.sidebarWidth),
               )
             : SIDEBAR_WIDTH_DEFAULT,
-        motionPref: prefs.motionPref === "reduced" ? "reduced" : "system",
+        // The Reduce motion control was removed; use its off-state as the
+        // application default and ignore an older persisted reduced setting.
+        motionPref: "system",
         soundPref: (["off", "subtle", "on"] as const).includes(prefs.soundPref as SoundLevel)
           ? (prefs.soundPref as SoundLevel)
           : "off",

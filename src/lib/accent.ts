@@ -56,5 +56,5 @@ export function applyAccent(hex: string): void {
   const b = hex.toLowerCase() === DEFAULT_ACCENT ? "#4f46e5" : shade(hex, 0.72);
   root.style.setProperty("--accent-a", hex);
   root.style.setProperty("--accent-b", b);
-  root.style.setProperty("--accent-gradient", `linear-gradient(135deg, ${hex}, ${b})`);
+  root.style.setProperty("--accent-fill", hex);
 }

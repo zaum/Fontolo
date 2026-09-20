@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowUpRight,
   DatabaseBackup,
-  Eye,
   FolderDown,
   FolderOpen,
   FolderPlus,
@@ -86,8 +85,6 @@ export function SettingsOverlay() {
   const setSettingsCategory = useFontStore((s) => s.setSettingsCategory);
   const settings = useFontStore((s) => s.settings);
   const updateSettings = useFontStore((s) => s.updateSettings);
-  const motionPref = useFontStore((s) => s.motionPref);
-  const setMotionPref = useFontStore((s) => s.setMotionPref);
   const soundPref = useFontStore((s) => s.soundPref);
   const setSoundPref = useFontStore((s) => s.setSoundPref);
   const themePref = useFontStore((s) => s.themePref);
@@ -446,12 +443,13 @@ export function SettingsOverlay() {
                           </div>
                         </div>
                         <button
-                          className="settings-data-btn"
+                          className="settings-data-btn settings-icon-btn"
                           onClick={refreshCatalog}
                           disabled={!settings.googleFontsEnabled || googleFontsProgress.phase === "checking"}
+                          aria-label={t("settings.googleFontsRefresh")}
+                          title={t("settings.googleFontsRefresh")}
                         >
                           <RefreshCw size={13} strokeWidth={1.5} className={googleFontsProgress.phase === "checking" ? "settings-scanning-icon" : undefined} />
-                          {t("settings.googleFontsRefresh")}
                         </button>
                       </div>
                       <div className="settings-row">
@@ -597,19 +595,6 @@ export function SettingsOverlay() {
                         >
                           {t("settings.accentReset")}
                         </button>
-                      </div>
-                      <div className="settings-row">
-                        <div>
-                          <div className="settings-label">
-                            <Eye size={13} strokeWidth={1.5} /> {t("settings.reduceMotion")}
-                          </div>
-                          <div className="settings-sub">{t("settings.reduceMotionSub")}</div>
-                        </div>
-                        <PillToggle
-                          on={motionPref === "reduced"}
-                          onChange={(on) => setMotionPref(on ? "reduced" : "system")}
-                          label={t("settings.reduceMotion")}
-                        />
                       </div>
                       <div className="detail-heading">{t("settings.sound")}</div>
                       <div className="settings-row">

@@ -55,6 +55,8 @@ const MAX_CONCURRENT_LOADS = 4;
 const MAX_LOCAL_AUTO_PREVIEW_BYTES = 8 * 1024 * 1024;
 let activeLoads = 0;
 const loadQueue: Array<() => void> = [];
+let preloadTimer: number | undefined;
+const pendingPreloads = new Map<string, ZFontFace>();
 
 // A font can briefly fail while it is being written (install/activate);
 // keep the failure so cards render fast, but let a later view retry it.
@@ -188,6 +190,27 @@ function ensureLoaded(face: ZFontFace): void {
 
 function localPreviewTooLarge(face: ZFontFace): boolean {
   return face.previewPath === null && face.fileSize > MAX_LOCAL_AUTO_PREVIEW_BYTES;
+}
+
+/** Queue a small window around the visible list without competing with paint. */
+export function preloadFaces(faces: ZFontFace[]): void {
+  if (!previewEnabled) return;
+  for (const face of faces) {
+    if (face.source !== "google" && !localPreviewTooLarge(face)) {
+      pendingPreloads.set(face.id, face);
+    }
+  }
+  if (preloadTimer !== undefined) window.clearTimeout(preloadTimer);
+  preloadTimer = window.setTimeout(() => {
+    preloadTimer = undefined;
+    if (!previewEnabled) {
+      pendingPreloads.clear();
+      return;
+    }
+    const queued = [...pendingPreloads.values()];
+    pendingPreloads.clear();
+    for (const face of queued) ensureLoaded(face);
+  }, 80);
 }
 
 export function useFontCss(face: ZFontFace | null): {

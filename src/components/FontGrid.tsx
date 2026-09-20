@@ -5,6 +5,7 @@ import { spring, staggerDelay } from "../design/springs";
 import { FamilyCard } from "./FamilyCard";
 import type { Family } from "../state/fontStore";
 import { SIZES, useFontStore } from "../state/fontStore";
+import { preloadFaces } from "../lib/fontLoader";
 
 export function FontGrid({ families }: { families: Family[] }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -24,6 +25,17 @@ export function FontGrid({ families }: { families: Family[] }) {
 
   const selectedFamily = useFontStore((s) => s.selectedFamily);
   const selection = useFontStore((s) => s.selection);
+  const virtualItems = virtualizer.getVirtualItems();
+  const firstVisible = virtualItems[0]?.index ?? 0;
+  const lastVisible = virtualItems[virtualItems.length - 1]?.index ?? -1;
+
+  useEffect(() => {
+    if (lastVisible < 0) return;
+    const from = Math.max(0, firstVisible - 8);
+    const to = Math.min(families.length, lastVisible + 9);
+    preloadFaces(families.slice(from, to).flatMap((family) => family.faces));
+  }, [families, firstVisible, lastVisible]);
+
   useEffect(() => {
     const focus =
       selection.length > 0 ? selection[selection.length - 1] : selectedFamily;
@@ -41,7 +53,7 @@ export function FontGrid({ families }: { families: Family[] }) {
         className="grid-inner"
         style={{ height: virtualizer.getTotalSize(), position: "relative" }}
       >
-        {virtualizer.getVirtualItems().map((item) => (
+        {virtualItems.map((item) => (
           <div
             key={item.key}
             data-index={item.index}

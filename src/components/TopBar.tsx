@@ -52,10 +52,10 @@ function SortMenu() {
             <motion.ul
               className="sort-menu glass-e3"
               role="listbox"
-              initial={{ opacity: 0, y: -6, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.13 } }}
-              transition={springSnappy}
+              initial={{ opacity: 0, y: -3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -2, transition: { duration: 0.08, ease: "easeOut" } }}
+              transition={{ duration: 0.12, ease: "easeOut" }}
             >
               {SORT_MODES.map((mode) => (
                 <li key={mode}>

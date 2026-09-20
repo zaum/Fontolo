@@ -729,14 +729,17 @@ export function Sidebar() {
               index={i++}
               related={hasRelated && related.tags.includes(tag)}
               rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}
-              onContextMenu={(e) =>
-                openContextMenu(e, [
-                  {
-                    label: translate("menu.removeTagEverywhere", { tag }),
-                    danger: true,
-                    action: () => removeTagEverywhere(tag),
-                  },
-                ])
+              onContextMenu={
+                protectedTags.includes(tag)
+                  ? undefined
+                  : (e) =>
+                      openContextMenu(e, [
+                        {
+                          label: translate("menu.removeTagEverywhere", { tag }),
+                          danger: true,
+                          action: () => removeTagEverywhere(tag),
+                        },
+                      ])
               }
             />
           ))}

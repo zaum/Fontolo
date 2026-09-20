@@ -26,7 +26,7 @@
 
   --accent-a: #7c3aed;
   --accent-b: #4f46e5;
-  --accent-gradient: linear-gradient(135deg, #7c3aed, #4f46e5);
+  --accent-fill: #6d35d8;
 
   --success: #4ade80;
   --warning: #fbbf24;
@@ -37,13 +37,9 @@
   --badge-woff: #fbbf24;
 
   --tooltip-bg: #1a1a22;
-  --hero-grad: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.55));
-  --settings-glass-grad: linear-gradient(
-    165deg,
-    rgba(255, 255, 255, 0.11),
-    rgba(255, 255, 255, 0.045) 45%,
-    rgba(255, 255, 255, 0.07)
-  );
+  --settings-panel-bg: #2a2a34;
+  --hero-grad: #ffffff;
+  --settings-glass-grad: #ffffff;
 
   --fs-10: 10px;
   --fs-11: 11px;
@@ -99,13 +95,9 @@
   --badge-woff: #f59e0b;
 
   --tooltip-bg: #ffffff;
-  --hero-grad: linear-gradient(180deg, #33333f, rgba(51, 51, 63, 0.5));
-  --settings-glass-grad: linear-gradient(
-    165deg,
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 255, 255, 0.78) 45%,
-    rgba(255, 255, 255, 0.88)
-  );
+  --settings-panel-bg: #ffffff;
+  --hero-grad: #33333f;
+  --settings-glass-grad: #ffffff;
 }
 
 * {
@@ -238,12 +230,7 @@ input:focus {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    60deg,
-    transparent 30%,
-    rgba(var(--ink-rgb), 0.06) 50%,
-    transparent 70%
-  );
+  background: rgba(var(--ink-rgb), 0.06);
   transform: translateX(-100%);
   animation: shimmer 1.5s infinite;
 }

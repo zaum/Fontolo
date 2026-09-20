@@ -1,6 +1,5 @@
 import { motion } from "motion/react";
 import { useState } from "react";
-import { springBouncy } from "../springs";
 import { playToggle } from "../../lib/sound";
 
 interface Props {
@@ -48,13 +47,13 @@ export function PillToggle({ on, disabled, onChange, label, size = "sm" }: Props
         playToggle(!on);
         onChange(!on);
       }}
-      whileTap={disabled ? undefined : { scale: 0.94 }}
+      whileTap={undefined}
     >
       <motion.span
         className="pill-thumb"
         layout
-        animate={{ scaleX: pressed ? 1.25 : 1 }}
-        transition={springBouncy}
+        animate={{ scaleX: pressed ? 1.08 : 1 }}
+        transition={{ duration: 0.1, ease: "easeOut" }}
         style={{ originX: on ? 1 : 0 }}
       />
     </motion.button>
