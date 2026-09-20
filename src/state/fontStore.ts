@@ -243,6 +243,7 @@ interface FontStore {
   deleteTrashEntry: (entryId: string) => Promise<void>;
   emptyTrash: () => Promise<void>;
   setFamilyTags: (family: string, tags: string[]) => Promise<void>;
+  renameTag: (from: string, to: string) => Promise<void>;
   createCollection: (name: string) => Promise<void>;
   deleteCollection: (name: string) => Promise<void>;
   renameCollection: (from: string, to: string) => Promise<void>;
@@ -1065,6 +1066,34 @@ export const useFontStore = create<FontStore>((set, get) => ({
       await ipc.setTags(family, tags);
     } catch (e) {
       set({ tags: prev });
+      toast.error(t("toast.couldntSaveTags"), String(e));
+    }
+  },
+
+  renameTag: async (from, to) => {
+    const clean = to.trim();
+    const state = get();
+    if (!clean || clean === from || state.protectedTags.includes(from) || state.protectedTags.includes(clean)) return;
+
+    const previous = state.tags;
+    const next = { ...previous };
+    const changed: Array<[string, string[]]> = [];
+    for (const [family, list] of Object.entries(previous)) {
+      if (!list.includes(from)) continue;
+      const updated = [...new Set(list.map((tag) => (tag === from ? clean : tag)))];
+      next[family] = updated;
+      changed.push([family, updated]);
+    }
+    if (changed.length === 0) return;
+
+    set({
+      tags: next,
+      tagSel: state.tagSel.map((tag) => (tag === from ? clean : tag)),
+    });
+    try {
+      await Promise.all(changed.map(([family, tags]) => ipc.setTags(family, tags)));
+    } catch (e) {
+      set({ tags: previous, tagSel: get().tagSel.map((tag) => (tag === clean ? from : tag)) });
       toast.error(t("toast.couldntSaveTags"), String(e));
     }
   },

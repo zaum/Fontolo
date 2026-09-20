@@ -305,6 +305,7 @@
   "tour.last.title": "Une dernière chose",
   "tour.last.body": "Glissez des fichiers de police, des dossiers ou des archives zip n’importe où sur cette fenêtre pour les installer. Voilà — profitez de votre bibliothèque.",
   "menu.rename": "Renommer",
+  "menu.renameTag": "Renommer l’étiquette",
   "menu.exportFontList": "Exporter la liste des polices (métadonnées)…",
   "menu.deleteCollection": "Supprimer la collection",
   "menu.removeTagEverywhere": "Retirer l’étiquette « {tag} » partout",

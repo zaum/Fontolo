@@ -305,6 +305,7 @@
   "tour.last.title": "Una última cosa",
   "tour.last.body": "Arrastra archivos de fuente, carpetas o archivos zip a cualquier parte de esta ventana para instalarlos. Eso es todo — disfruta de tu biblioteca.",
   "menu.rename": "Renombrar",
+  "menu.renameTag": "Renombrar etiqueta",
   "menu.exportFontList": "Exportar la lista de fuentes (metadatos)…",
   "menu.deleteCollection": "Eliminar la colección",
   "menu.removeTagEverywhere": "Quitar la etiqueta «{tag}» de todas partes",

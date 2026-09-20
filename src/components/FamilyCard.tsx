@@ -109,10 +109,19 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const [starPop, setStarPop] = useState(0);
   const expandSignal = useFontStore((s) => s.expandSignal);
   const expandOpen = useFontStore((s) => s.expandOpen);
+  // Google catalogue cards start with one fallback face until their real
+  // metadata is fetched, so keep the expander available only while that
+  // style count is still unknown.
+  const canExpand =
+    family.faces.length > 1 || Boolean(family.google && family.google.styles.length === 0);
   useEffect(() => {
-    // Single-face families have nothing to expand — not even via "expand all".
-    setExpanded(expandOpen && family.faces.length > 1);
+    setExpanded(expandOpen && canExpand);
   }, [expandSignal]);
+  useEffect(() => {
+    // Once catalogue metadata confirms a single style, close the temporary
+    // fallback expansion and remove its affordance.
+    if (!canExpand) setExpanded(false);
+  }, [canExpand]);
 
   const size = SIZES[sizeIndex];
   const lead = family.faces.find((f) => f.style === "Regular") ?? family.faces[0];
@@ -133,7 +142,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
 
   return (
     <article
-      className={`family-card ${selected ? "card-selected" : ""}`}
+      className={`family-card ${selected ? "card-selected" : ""} ${expanded ? "card-expanded" : ""}`}
       data-family={family.name}
       onClick={(e) => {
         // Only the body toggles the style list — buttons (star, pill,
@@ -153,9 +162,8 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
         st.selectWith(family.name, mode, st.visibleOrder);
         // Single-face families have no style list to open — clicking only
-        // selects them, it never expands. A catalogue family always opens: its
-        // style list arrives with the metadata.
-        if (family.faces.length > 1 || family.google) setExpanded((v) => !v);
+        // selects them, it never expands.
+        if (canExpand) setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
@@ -231,7 +239,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         >
           + {t("card.addTag")}
         </button>
-        {(family.faces.length > 1 || family.google) && (
+        {canExpand && (
           <motion.button
             className="card-expand"
             aria-label={t(expanded ? "card.collapseStyles" : "card.expandStyles")}

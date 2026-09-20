@@ -297,6 +297,7 @@
   "tour.last.title": "最後一件事",
   "tour.last.body": "把字型檔、資料夾或 zip 壓縮檔拖到這個視窗的任意位置即可安裝。就這些——享受你的字型庫吧。",
   "menu.rename": "重新命名",
+  "menu.renameTag": "重新命名標籤",
   "menu.exportFontList": "匯出字型清單（中繼資料）…",
   "menu.deleteCollection": "刪除分組",
   "menu.removeTagEverywhere": "在所有字型上移除標籤「{tag}」",

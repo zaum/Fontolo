@@ -1,8 +1,20 @@
 # Fontolo — Changelog
 
-* **Total commits:** 2
-* **Date range:** 2026-09-19 – 2026-09-19
-* **Environment / Context:** Main branch maintenance and scan performance fix
+* **Total commits:** 4
+* **Date range:** 2026-09-19 – 2026-09-20
+* **Environment / Context:** Main branch maintenance, scan performance, and UI refinement
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-20</sub></sup> · 🎨 UI/UX · Refine Style Expansion, Size Slider, and Tag Editing
+* Kept single-style font cards collapsed so clicking them only selects the family.
+* Limited the accent fill of the preview-size slider to the selected value and left the remaining track neutral.
+* Added a visible accent rail to expanded multi-style cards and added a sidebar context-menu action for renaming a tag across every family that uses it.
+* Restored the main window natively during Tauri startup so an off-screen or hidden window is centered before the WebView finishes loading.
+* Pinned visible font previews in the bounded browser cache so scrolling cannot replace active previews with the browser fallback font.
+* Preserved tag name casing during renames, prevented duplicate rename saves, corrected the preview-size thumb alignment, and displayed version 0.3.1 below Settings.
+
+`Direct Commit` · `pending`
 
 ---
 

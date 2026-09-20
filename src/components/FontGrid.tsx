@@ -5,7 +5,7 @@ import { spring, staggerDelay } from "../design/springs";
 import { FamilyCard } from "./FamilyCard";
 import type { Family } from "../state/fontStore";
 import { SIZES, useFontStore } from "../state/fontStore";
-import { preloadFaces } from "../lib/fontLoader";
+import { preloadFaces, setVisiblePreviewFaces } from "../lib/fontLoader";
 
 export function FontGrid({ families }: { families: Family[] }) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -31,10 +31,15 @@ export function FontGrid({ families }: { families: Family[] }) {
 
   useEffect(() => {
     if (lastVisible < 0) return;
+    setVisiblePreviewFaces(
+      families.slice(firstVisible, lastVisible + 1).flatMap((family) => family.faces),
+    );
     const from = Math.max(0, firstVisible - 8);
     const to = Math.min(families.length, lastVisible + 9);
     preloadFaces(families.slice(from, to).flatMap((family) => family.faces));
   }, [families, firstVisible, lastVisible]);
+
+  useEffect(() => () => setVisiblePreviewFaces([]), []);
 
   useEffect(() => {
     const focus =

@@ -301,6 +301,7 @@
   "tour.last.title": "最后一件事",
   "tour.last.body": "把字体文件、文件夹或 zip 压缩包拖到这个窗口的任意位置即可安装。就这些——享受你的字体库吧。",
   "menu.rename": "重命名",
+  "menu.renameTag": "重命名标签",
   "menu.exportFontList": "导出字体清单（元数据）…",
   "menu.deleteCollection": "删除分组",
   "menu.removeTagEverywhere": "在所有字体上移除标签“{tag}”",

@@ -513,8 +513,11 @@ export function TopBar() {
 
       <SampleMenu />
 
-      <div className="topbar-size" style={{ "--fill": `${fill}%` } as CSSProperties}>
-        <input
+        <div className="topbar-size" style={{ "--fill": `${fill}%` } as CSSProperties}>
+          <span className="topbar-size-track" aria-hidden="true">
+            <span className="topbar-size-fill" />
+          </span>
+          <input
           type="range"
           min={0}
           max={SIZES.length - 1}

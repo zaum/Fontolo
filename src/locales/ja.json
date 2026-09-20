@@ -297,6 +297,7 @@
   "tour.last.title": "最後にひとつ",
   "tour.last.body": "フォントファイル・フォルダ・zip アーカイブをこのウィンドウのどこかにドラッグすればインストールできます。以上です — よいフォントライフを。",
   "menu.rename": "名前を変更",
+  "menu.renameTag": "タグ名を変更",
   "menu.exportFontList": "フォント一覧を書き出す（メタデータ）…",
   "menu.deleteCollection": "コレクションを削除",
   "menu.removeTagEverywhere": "タグ「{tag}」をすべてから外す",

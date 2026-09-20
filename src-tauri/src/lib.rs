@@ -943,6 +943,12 @@ pub fn run() {
         .manage(Store(std::sync::Mutex::new(state)))
         .manage(watcher::WatchHandle(std::sync::Mutex::new(None)))
         .setup(move |app| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.center();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
             allow_previews(app.handle(), &extra_dirs);
             // The preview cache is served to the webview through the asset
             // protocol, so its folder has to be in scope.

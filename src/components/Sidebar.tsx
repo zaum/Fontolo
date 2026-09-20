@@ -6,6 +6,7 @@ import { spring, springSoft, staggerDelay } from "../design/springs";
 import { SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN, allFoundryCounts, allTags, familiesFor, foundryGroupsFor, useFontStore, type BrowseKind, type Family } from "../state/fontStore";
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
+import { APP_VERSION } from "../lib/version";
 
 // Anchor for shift+click range selection, and the key of the last picked
 // row — it owns the gliding pill inside a multi-selected section.
@@ -142,30 +143,42 @@ function RenameInput({
   initial,
   onCommit,
   onCancel,
+  icon = <FolderOpen size={15} strokeWidth={1.5} />,
 }: {
   initial: string;
   onCommit: (name: string) => void;
   onCancel: () => void;
+  icon?: React.ReactNode;
 }) {
   const t = useT();
   const [name, setName] = useState(initial);
   const ref = useRef<HTMLInputElement>(null);
+  const committed = useRef(false);
   useEffect(() => {
     ref.current?.focus();
     ref.current?.select();
   }, []);
+  const commit = () => {
+    if (committed.current) return;
+    committed.current = true;
+    onCommit(name);
+  };
+  const cancel = () => {
+    committed.current = true;
+    onCancel();
+  };
   return (
     <div className="collection-input">
-      <FolderOpen size={15} strokeWidth={1.5} />
+      {icon}
       <input
         ref={ref}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onCommit(name);
-          if (e.key === "Escape") onCancel();
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") cancel();
         }}
-        onBlur={() => onCommit(name)}
+        onBlur={commit}
         aria-label={t("side.renameAria")}
         spellCheck={false}
       />
@@ -187,11 +200,13 @@ export function Sidebar() {
   const scanning = useFontStore((s) => s.phase === "scanning");
   const deleteCollection = useFontStore((s) => s.deleteCollection);
   const renameCollection = useFontStore((s) => s.renameCollection);
+  const renameTag = useFontStore((s) => s.renameTag);
   const setFamilyTags = useFontStore((s) => s.setFamilyTags);
   const pendingCollectionFor = useFontStore((s) => s.pendingCollectionFor);
 
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [renamingTag, setRenamingTag] = useState<string | null>(null);
   const [browseOpen, setBrowseOpen] = useState(true);
   const [collectionsOpen, setCollectionsOpen] = useState(true);
   const [tagsOpen, setTagsOpen] = useState(true);
@@ -717,31 +732,49 @@ export function Sidebar() {
             >
           <div className="sidebar-list sidebar-cols">
           {[...tagCounts.entries()].map(([tag, count]) => (
-            <NavRow
-              key={tag}
-              active={tagSel.includes(tag)}
-              lead={tagLead === tag}
-              pillId="nav-pill-tags"
-              onPick={(e) => pickFromList(e, "tags", tag)}
-              icon={<Tag size={15} strokeWidth={1.5} />}
-              label={tag}
-              count={count}
-              index={i++}
-              related={hasRelated && related.tags.includes(tag)}
-              rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}
-              onContextMenu={
-                protectedTags.includes(tag)
-                  ? undefined
-                  : (e) =>
-                      openContextMenu(e, [
-                        {
-                          label: translate("menu.removeTagEverywhere", { tag }),
-                          danger: true,
-                          action: () => removeTagEverywhere(tag),
-                        },
-                      ])
-              }
-            />
+            renamingTag === tag ? (
+              <RenameInput
+                key={tag}
+                initial={tag}
+                icon={<Tag size={15} strokeWidth={1.5} />}
+                onCommit={(next) => {
+                  setRenamingTag(null);
+                  void renameTag(tag, next);
+                }}
+                onCancel={() => setRenamingTag(null)}
+              />
+            ) : (
+              <NavRow
+                key={tag}
+                active={tagSel.includes(tag)}
+                lead={tagLead === tag}
+                pillId="nav-pill-tags"
+                onPick={(e) => pickFromList(e, "tags", tag)}
+                icon={<Tag size={15} strokeWidth={1.5} />}
+                label={tag}
+                count={count}
+                index={i++}
+                related={hasRelated && related.tags.includes(tag)}
+                rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}
+                onContextMenu={
+                  protectedTags.includes(tag)
+                    ? undefined
+                    : (e) =>
+                        openContextMenu(e, [
+                          {
+                            label: translate("menu.renameTag"),
+                            action: () => setRenamingTag(tag),
+                          },
+                          { kind: "separator" },
+                          {
+                            label: translate("menu.removeTagEverywhere", { tag }),
+                            danger: true,
+                            action: () => removeTagEverywhere(tag),
+                          },
+                        ])
+                }
+              />
+            )
           ))}
           </div>
             </motion.div>
@@ -809,6 +842,7 @@ export function Sidebar() {
           index={i++}
           dataTour="settings"
         />
+        <div className="sidebar-version tabular">v{APP_VERSION}</div>
       </div>
     </motion.aside>
   );

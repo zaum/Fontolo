@@ -16,6 +16,7 @@ interface CacheEntry {
 }
 const cache = new Map<string, CacheEntry>();
 const listeners = new Map<string, Set<() => void>>();
+const visiblePreviewNames = new Set<string>();
 let nextLoadId = 0;
 let previewEnabled = false;
 const previewGateListeners = new Set<() => void>();
@@ -122,7 +123,7 @@ function hash(s: string): string {
 
 function evictIfNeeded(): void {
   while (cache.size > FONT_CACHE_MAX) {
-    const oldest = cache.keys().next().value;
+    const oldest = [...cache.keys()].find((name) => !visiblePreviewNames.has(name));
     if (oldest === undefined) break;
     const entry = cache.get(oldest);
     if (entry) removeEntry(oldest, entry);
@@ -211,6 +212,21 @@ export function preloadFaces(faces: ZFontFace[]): void {
     pendingPreloads.clear();
     for (const face of queued) ensureLoaded(face);
   }, 80);
+}
+
+/** Keep the currently rendered cards in the browser font cache. Preloading
+ * neighbouring rows may be discarded first, but a visible card must never
+ * fall back to the browser default while it remains on screen. */
+export function setVisiblePreviewFaces(faces: ZFontFace[]): void {
+  visiblePreviewNames.clear();
+  if (previewEnabled) {
+    for (const face of faces) {
+      if (face.source !== "google" && !localPreviewTooLarge(face)) {
+        visiblePreviewNames.add(cssName(face));
+      }
+    }
+  }
+  evictIfNeeded();
 }
 
 export function useFontCss(face: ZFontFace | null): {

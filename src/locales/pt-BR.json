@@ -305,6 +305,7 @@
   "tour.last.title": "Mais uma coisa",
   "tour.last.body": "Arraste arquivos de fonte, pastas ou arquivos zip para qualquer lugar desta janela para instalá-los. É isso — aproveite sua biblioteca.",
   "menu.rename": "Renomear",
+  "menu.renameTag": "Renomear etiqueta",
   "menu.exportFontList": "Exportar a lista de fontes (metadados)…",
   "menu.deleteCollection": "Excluir a coleção",
   "menu.removeTagEverywhere": "Remover a etiqueta “{tag}” de tudo",

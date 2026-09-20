@@ -366,6 +366,7 @@
   "tour.last.title": "One last thing",
   "tour.last.body": "Drag font files, folders, or zip archives anywhere onto this window to install them. That's it — enjoy your library.",
   "menu.rename": "Rename",
+  "menu.renameTag": "Rename tag",
   "menu.exportFontList": "Export font list (metadata)…",
   "menu.deleteCollection": "Delete collection",
   "menu.removeTagEverywhere": "Remove tag “{tag}” everywhere",

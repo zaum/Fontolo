@@ -301,6 +301,7 @@
   "tour.last.title": "Noch eine Sache",
   "tour.last.body": "Zieh Schriftdateien, Ordner oder Zip-Archive irgendwo auf dieses Fenster, um sie zu installieren. Das war's — viel Freude mit deiner Bibliothek.",
   "menu.rename": "Umbenennen",
+  "menu.renameTag": "Tag umbenennen",
   "menu.exportFontList": "Schriftliste exportieren (Metadaten)…",
   "menu.deleteCollection": "Sammlung löschen",
   "menu.removeTagEverywhere": "Tag „{tag}“ überall entfernen",
