@@ -60,8 +60,8 @@ function MenuPanel({ x, y, items }: { x: number; y: number; items: MenuItem[] })
     if (!el) return;
     const r = el.getBoundingClientRect();
     setPos({
-      x: Math.min(x, window.innerWidth - r.width - 8),
-      y: Math.min(y, window.innerHeight - r.height - 8),
+      x: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)),
+      y: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)),
     });
   }, [x, y, items]);
 
@@ -170,9 +170,9 @@ function MenuPanel({ x, y, items }: { x: number; y: number; items: MenuItem[] })
       ref={ref}
       className={`ctx-menu glass-e3${hasGrid ? " ctx-wide" : ""}`}
       style={{ left: pos.x, top: pos.y }}
-      initial={{ opacity: 0, scale: 0.96, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }}
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 0, transition: { duration: 0.12 } }}
       transition={springSnappy}
       role="menu"
     >

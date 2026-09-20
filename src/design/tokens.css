@@ -38,6 +38,7 @@
 
   --tooltip-bg: #1a1a22;
   --settings-panel-bg: #2a2a34;
+  --settings-row-bg: rgba(255, 255, 255, 0.06);
   --hero-grad: #ffffff;
   --settings-glass-grad: #ffffff;
 
@@ -96,6 +97,7 @@
 
   --tooltip-bg: #ffffff;
   --settings-panel-bg: #ffffff;
+  --settings-row-bg: rgba(90, 90, 115, 0.045);
   --hero-grad: #33333f;
   --settings-glass-grad: #ffffff;
 }

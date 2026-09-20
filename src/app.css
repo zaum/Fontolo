@@ -297,10 +297,8 @@
   padding-top: 6px;
 }
 .sidebar-version {
-  padding: 5px 10px 1px;
   font-size: var(--fs-10);
   color: var(--text-tertiary);
-  text-align: right;
 }
 /* Fixed (non-scrolling) top block of the sidebar — currently the BROWSE
    section. Everything below it scrolls inside .sidebar-scroll. */
@@ -335,6 +333,18 @@
 }
 .nav-row:hover:not(.nav-active) {
   background: var(--e1);
+}
+.nav-row.nav-tag {
+  min-height: 28px;
+  background: var(--e2);
+  border: 1px solid rgba(var(--ink-rgb), 0.16);
+}
+.nav-row.nav-tag:hover:not(.nav-active) {
+  background: var(--e3);
+  border-color: rgba(var(--ink-rgb), 0.22);
+}
+.nav-row.nav-tag.nav-active {
+  border-color: transparent;
 }
 /* A selected row keeps its white-on-accent look on hover — otherwise the
    hover text color would turn it dark (unreadable in the light scheme). */
@@ -1300,7 +1310,7 @@
   padding: 4px 7px 4px 10px;
   border-radius: 4px;
   background: var(--e2);
-  border: 1px solid rgba(var(--ink-rgb), 0.08);
+  border: 1px solid rgba(var(--ink-rgb), 0.16);
 }
 .tag-chip button {
   display: grid;
@@ -1320,7 +1330,7 @@
   max-width: 220px;
   flex-shrink: 0;
   cursor: pointer;
-  background: var(--e3);
+  background: var(--e2);
 }
 .tag-pick:hover {
   border-color: color-mix(in srgb, var(--accent-a) 45%, transparent);
@@ -1354,15 +1364,15 @@
 /* The "+ Add tag" button in the font list: same frame as the tag chips,
    uppercase and a touch smaller, but transparent (no fill). */
 .tag-add {
-  font-size: 9px;
+  font-size: var(--fs-11);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
   background: transparent;
-  border: 1px dashed rgba(var(--ink-rgb), 0.12);
+  border: 1px solid rgba(var(--ink-rgb), 0.16);
   border-radius: 4px;
-  padding: 3px 8px;
+  padding: 4px 8px;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -3123,9 +3133,9 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 14px;
-  border: 1px solid rgba(var(--ink-rgb), 0.07);
+  border: none;
   border-radius: 8px;
-  background: rgba(var(--scrim-rgb), 0.16);
+  background: var(--settings-row-bg);
 }
 .settings-col {
   flex-direction: column;
@@ -3209,7 +3219,7 @@
   padding: 6px 10px;
   border-radius: 5px;
   background: var(--e1);
-  border: 1px solid transparent;
+  border: none;
   color: var(--text-secondary);
 }
 .settings-folder-path {
@@ -3492,7 +3502,7 @@
   font-weight: 500;
   color: var(--text-secondary);
   background: var(--e1);
-  border: 1px solid transparent;
+  border: none;
   transition: background var(--t-quick) ease, color var(--t-quick) ease,
     transform var(--t-micro) ease;
 }

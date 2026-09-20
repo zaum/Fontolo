@@ -1,6 +1,6 @@
 # Fontolo — Changelog
 
-* **Total commits:** 4
+* **Total commits:** 5
 * **Date range:** 2026-09-19 – 2026-09-20
 * **Environment / Context:** Main branch maintenance, scan performance, and UI refinement
 
@@ -13,6 +13,8 @@
 * Restored the main window natively during Tauri startup so an off-screen or hidden window is centered before the WebView finishes loading.
 * Pinned visible font previews in the bounded browser cache so scrolling cannot replace active previews with the browser fallback font.
 * Preserved tag name casing during renames, prevented duplicate rename saves, corrected the preview-size thumb alignment, and displayed version 0.3.1 below Settings.
+* Standardized tag outlines across card and sidebar filters, aligned the Add tag control, and kept the version alongside the Settings entry as version 0.3.2.
+* Corrected context-menu viewport placement and made light-theme Settings blocks lighter while removing borders from solid filled controls.
 
 `Direct Commit` · `pending`
 
