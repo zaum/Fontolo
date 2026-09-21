@@ -52,6 +52,10 @@ pub struct AppState {
     #[serde(default = "default_true")]
     pub google_fonts_enabled: bool,
 
+    /// Globally remembered glyph map size in CSS pixels.
+    #[serde(default = "default_glyph_size")]
+    pub glyph_size: u8,
+
     /// Google fonts downloaded from the catalogue and installed into the library
     /// folder. Keeping the list here is what lets an installed Google font stay
     /// recognisable as a Google font: the file itself sits in the normal font
@@ -65,6 +69,10 @@ pub struct Store(pub Mutex<AppState>);
 
 fn default_true() -> bool {
     true
+}
+
+fn default_glyph_size() -> u8 {
+    16
 }
 
 impl AppState {

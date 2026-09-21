@@ -451,6 +451,8 @@ export function TopBar() {
   const search = useFontStore((s) => s.search);
   const setSearch = useFontStore((s) => s.setSearch);
   const visibleCount = useFontStore((s) => s.visibleOrder.length);
+  const detailPanelOpen = useFontStore((s) => s.detailPanelOpen);
+  const setDetailPanelOpen = useFontStore((s) => s.setDetailPanelOpen);
 
   const fill = (sizeIndex / (SIZES.length - 1)) * 100;
 
@@ -508,6 +510,19 @@ export function TopBar() {
       <SortMenu />
 
       <CompareButton />
+      <motion.button
+        className={`detail-panel-toggle ${detailPanelOpen ? "detail-panel-toggle-active" : ""}`}
+        aria-label={t("top.toggleDetails")}
+        aria-pressed={detailPanelOpen}
+        title={t("top.toggleDetails")}
+        onClick={() => setDetailPanelOpen(!detailPanelOpen)}
+        whileTap={{ scale: 0.94 }}
+      >
+        <svg className="detail-panel-toggle-icon" viewBox="0 0 18 18" aria-hidden="true">
+          <rect x="2" y="2.5" width="14" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.35" />
+          <rect className="detail-panel-toggle-pane" x="11.1" y="3.8" width="3.6" height="10.4" rx="0.8" stroke="currentColor" strokeWidth="1.15" />
+        </svg>
+      </motion.button>
     </motion.header>
   );
 }

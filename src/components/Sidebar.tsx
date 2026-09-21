@@ -27,12 +27,14 @@ function NavRow({
   pulsing,
   rowRef,
   dataTour,
+  tag,
+  onDropFamilies,
 }: {
   active: boolean;
   lead: boolean;
   pillId: string;
   onPick: (e: React.MouseEvent) => void;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
   count?: React.ReactNode;
   index: number;
@@ -43,15 +45,41 @@ function NavRow({
   /** Ref sink so the sidebar can scroll the row into view. */
   rowRef?: (el: HTMLElement | null) => void;
   dataTour?: string;
+  /** Tags use the same outlined chip treatment as font-card tags. */
+  tag?: boolean;
+  onDropFamilies?: (families: string[]) => void;
 }) {
+  const [dragOver, setDragOver] = useState(false);
   return (
     <motion.button
       ref={rowRef}
       data-tour={dataTour}
       data-family-row={related ? label : undefined}
-      className={`nav-row ${active ? "nav-active" : ""} ${related ? "nav-related" : ""} ${pulsing ? "nav-sync-pulse" : ""}`}
+      className={`nav-row ${tag ? "nav-tag" : ""} ${active ? "nav-active" : ""} ${related ? "nav-related" : ""} ${pulsing ? "nav-sync-pulse" : ""} ${dragOver ? "nav-drop-target" : ""}`}
       onClick={onPick}
       onContextMenu={onContextMenu}
+      onDragEnter={(e) => {
+        if (!onDropFamilies) return;
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragOver={(e) => {
+        if (!onDropFamilies) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        setDragOver(false);
+        if (!onDropFamilies) return;
+        e.preventDefault();
+        try {
+          const families = JSON.parse(e.dataTransfer.getData("application/x-fontolo-families"));
+          if (Array.isArray(families) && families.every((name) => typeof name === "string")) onDropFamilies(families);
+        } catch { /* Ignore drops that did not originate in Fontolo. */ }
+      }}
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ ...springSoft, delay: staggerDelay(index) }}
@@ -61,7 +89,7 @@ function NavRow({
         <motion.span className="nav-pill" layoutId={pillId} transition={spring} />
       )}
       {active && !lead && <span className="nav-pill" />}
-      <span className="nav-icon">{icon}</span>
+      {icon && <span className="nav-icon">{icon}</span>}
       <span className="nav-label">{label}</span>
       {count !== undefined && <span className="nav-count tabular">{count}</span>}
     </motion.button>
@@ -488,13 +516,9 @@ export function Sidebar() {
             <span className="sidebar-heading-chevron">{browseOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
             <span>{t("side.browse")}</span>
           </button>
-          <AnimatePresence>
-            <SectionReset
-              show={browse !== "library"}
-              label={t("side.resetFilter")}
-              onReset={() => setBrowse("library")}
-            />
-          </AnimatePresence>
+          <button className="sidebar-reset-all" onClick={() => { setBrowse("library"); setFilterSel([], [], []); }}>
+            {t("side.resetAll")}
+          </button>
         </div>
         <AnimatePresence initial={false}>
         {browseOpen && (
@@ -670,6 +694,12 @@ export function Sidebar() {
               label={name}
               count={(collections[name] ?? []).length}
               index={i++}
+              onDropFamilies={(families) => {
+                const st = useFontStore.getState();
+                void Promise.all(families
+                  .filter((family) => !(st.collections[name] ?? []).includes(family))
+                  .map((family) => st.toggleFamilyInCollection(name, family)));
+              }}
               related={hasRelated && related.cols.includes(name)}
               rowRef={hasRelated && related.cols.includes(name) ? setRowRef(`${focused}|c:${name}`) : undefined}
               onContextMenu={(e) =>
@@ -751,10 +781,11 @@ export function Sidebar() {
                 lead={tagLead === tag}
                 pillId="nav-pill-tags"
                 onPick={(e) => pickFromList(e, "tags", tag)}
-                icon={<Tag size={15} strokeWidth={1.5} />}
+                tag
                 label={tag}
                 count={count}
                 index={i++}
+                onDropFamilies={(families) => void useFontStore.getState().applyTagToFamilies(tag, families)}
                 related={hasRelated && related.tags.includes(tag)}
                 rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}
                 onContextMenu={
@@ -839,7 +870,8 @@ export function Sidebar() {
           pillId="nav-pill-footer"
           onPick={() => setSettingsOpen(true)}
           icon={<Settings size={15} strokeWidth={1.5} />}
-          label={`${t("side.settings")} · v${APP_VERSION}`}
+          label={t("side.settings")}
+          count={<span className="sidebar-version">v{APP_VERSION}</span>}
           index={i++}
           dataTour="settings"
         />

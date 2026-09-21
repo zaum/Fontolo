@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, Copy, Download, ExternalLink, FolderOpen, GripVertical, Plus, RotateCcw, Scale, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Copy, Download, ExternalLink, FolderOpen, GripVertical, Plus, RotateCcw, Scale, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
 import { useFontCss, formatBytes, pathBasename } from "../lib/fontLoader";
@@ -12,7 +13,7 @@ import { FormatBadge } from "./FamilyCard";
 import { exportFace, exportFamily } from "../lib/menus";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { classifyLicense } from "../lib/license";
-import { playStar, playTag } from "../lib/sound";
+import { playTag } from "../lib/sound";
 import { t as translate, useT, type TKey } from "../lib/i18n";
 
 const WATERFALL = [14, 20, 28, 40, 56];
@@ -260,6 +261,39 @@ const charsetCache = new Map<string, number[]>();
 const CHARSET_CACHE_MAX = 200;
 const GLYPH_LIMIT = 512;
 const GLYPH_PAGE = 512;
+const GLYPH_SIZE_MIN = 12;
+const GLYPH_SIZE_MAX = 32;
+const GLYPH_SIZE_STEP = 4;
+
+function GlyphSizeControls() {
+  const t = useT();
+  const settings = useFontStore((s) => s.settings);
+  const updateSettings = useFontStore((s) => s.updateSettings);
+  const setGlyphSize = (glyphSize: number) => void updateSettings({ ...settings, glyphSize });
+
+  return (
+    <span className="glyph-size-controls" role="group" aria-label={t("glyph.sizeControlsAria")}>
+      <button
+        className="glyph-size-button"
+        onClick={() => setGlyphSize(Math.max(GLYPH_SIZE_MIN, settings.glyphSize - GLYPH_SIZE_STEP))}
+        disabled={settings.glyphSize <= GLYPH_SIZE_MIN}
+        aria-label={t("glyph.decreaseSize")}
+        title={t("glyph.decreaseSize")}
+      >
+        <ZoomOut size={13} strokeWidth={1.75} />
+      </button>
+      <button
+        className="glyph-size-button"
+        onClick={() => setGlyphSize(Math.min(GLYPH_SIZE_MAX, settings.glyphSize + GLYPH_SIZE_STEP))}
+        disabled={settings.glyphSize >= GLYPH_SIZE_MAX}
+        aria-label={t("glyph.increaseSize")}
+        title={t("glyph.increaseSize")}
+      >
+        <ZoomIn size={13} strokeWidth={1.75} />
+      </button>
+    </span>
+  );
+}
 
 function charsetSet(id: string, list: number[]) {
   charsetCache.delete(id);
@@ -281,8 +315,14 @@ function GlyphMap({
   variation?: string;
 }) {
   const t = useT();
+  const glyphSize = useFontStore((s) => s.settings.glyphSize);
   const [cps, setCps] = useState<number[] | null>(charsetCache.get(face.id) ?? null);
   const [shown, setShown] = useState(GLYPH_LIMIT);
+  const [hoveredGlyph, setHoveredGlyph] = useState<{ character: string; x: number; y: number } | null>(null);
+  const previewGlyph = (event: React.MouseEvent<HTMLButtonElement>, character: string) => {
+    const { left, top, width, height } = event.currentTarget.getBoundingClientRect();
+    setHoveredGlyph({ character, x: left + width / 2, y: top + height / 2 });
+  };
 
   useEffect(() => {
     setShown(GLYPH_LIMIT);
@@ -317,7 +357,7 @@ function GlyphMap({
   const visible = cps.slice(0, shown);
   return (
     <>
-      <div className="glyph-grid">
+      <div className="glyph-grid" style={{ "--glyph-size": `${glyphSize}px`, "--glyph-cell-size": `${glyphSize + 18}px` } as React.CSSProperties}>
         {visible.map((cp) => {
           const ch = String.fromCodePoint(cp);
           const hex = cp.toString(16).toUpperCase().padStart(4, "0");
@@ -331,18 +371,37 @@ function GlyphMap({
                 fontFamily: fontFamily ?? undefined,
                 fontVariationSettings: variation,
               }}
-              onClick={() =>
+              onClick={(event) => {
+                if (hoveredGlyph) setHoveredGlyph(null);
+                else previewGlyph(event, ch);
                 navigator.clipboard
                   .writeText(ch)
                   .then(() => toast.success(t("glyph.copied", { ch }), `U+${hex}`, "tick"))
-                  .catch(() => toast.error(t("toast.couldntCopy")))
-              }
+                  .catch(() => toast.error(t("toast.couldntCopy")));
+              }}
             >
               {ch}
             </button>
           );
         })}
       </div>
+      {hoveredGlyph &&
+        createPortal(
+          <span
+            className="glyph-hover-preview"
+            style={{
+              left: hoveredGlyph.x,
+              top: hoveredGlyph.y,
+              fontFamily: fontFamily ?? undefined,
+              fontVariationSettings: variation,
+              fontSize: `${glyphSize * 5}px`,
+            }}
+            onPointerLeave={() => setHoveredGlyph(null)}
+          >
+            {hoveredGlyph.character}
+          </span>,
+          document.body,
+        )}
       {shown < cps.length && (
         <button className="glyph-more" onClick={() => setShown((n) => Math.min(n + GLYPH_PAGE, cps.length))}>
           {t("glyph.showAll", { count: cps.length })}
@@ -538,11 +597,11 @@ function ConflictFileCard({ path }: { path: string }) {
 export function DetailPanel() {
   const t = useT();
   const selectedFamily = useFontStore((s) => s.selectedFamily);
+  const detailPanelOpen = useFontStore((s) => s.detailPanelOpen);
   const fonts = useFontStore((s) => s.fonts);
   const tags = useFontStore((s) => s.tags);
   const googleCatalog = useFontStore((s) => s.googleCatalog);
   const googleMeta = useFontStore((s) => s.googleMeta);
-  const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const uninstallFamily = useFontStore((s) => s.uninstallFamily);
   const sampleText = useFontStore((s) => s.sampleText);
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
@@ -569,7 +628,7 @@ export function DetailPanel() {
     [setPanelWidth],
   );
 
-  const family = selectedFamily
+  const family = detailPanelOpen && selectedFamily
     ? selectGoogleFamily({ fonts, tags, googleCatalog, googleMeta }, selectedFamily) ??
       familiesFor(fonts, tags).get(selectedFamily) ??
       null
@@ -585,9 +644,6 @@ export function DetailPanel() {
     setAxisValues({});
     setFeatureOverrides({});
   }, [selectedFamily]);
-
-  const favorites = useFontStore((s) => s.favorites);
-  const toggleFavorite = useFontStore((s) => s.toggleFavorite);
 
   const lead =
     family?.faces.find((f) => f.id === styleId) ??
@@ -633,7 +689,6 @@ export function DetailPanel() {
           .map(([tag, on]) => `"${tag}" ${on ? 1 : 0}`)
           .join(", ")
       : undefined;
-  const favorite = family ? favorites.includes(family.name) : false;
   const conflicts = family ? conflictsFor(fonts).get(family.name) ?? [] : [];
 
   const variation =
@@ -681,86 +736,7 @@ export function DetailPanel() {
             >
               <FormatBadge format={family.formats[0]} isVariable={family.isVariable} />
               <h2 className="detail-title">{family.name}</h2>
-              <motion.button
-                className={`star-btn ${favorite ? "star-on" : ""}`}
-                aria-label={t(favorite ? "detail.unfavorite" : "detail.favorite")}
-                aria-pressed={favorite}
-                onClick={() => {
-                  const st = useFontStore.getState();
-                  if (st.selection.length > 1 && st.selection.includes(family.name)) {
-                    playStar(true);
-                    void st.favoriteMany(st.selection);
-                    return;
-                  }
-                  playStar(!favorite);
-                  void toggleFavorite(family.name);
-                }}
-                whileTap={{ scale: 0.85 }}
-              >
-                <Star size={15} strokeWidth={1.5} />
-              </motion.button>
-              <button className="detail-close" aria-label={t("detail.close")} onClick={() => useFontStore.setState({ selectedFamily: null })}>
-                <X size={15} strokeWidth={1.5} />
-              </button>
             </motion.header>
-
-            <motion.section
-              className="detail-specimen"
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-            >
-              <span
-                className="specimen-glyphs"
-                style={{
-                  fontFamily: fontFamily ?? undefined,
-                  fontStyle: lead.italic ? "italic" : "normal",
-                  fontVariationSettings: variation,
-                }}
-              >
-                Aa
-              </span>
-              <span className="specimen-meta">
-                <span className="specimen-style">{lead.style}</span>
-                <span className="specimen-sub tabular">
-                  {t("detail.stylesCount", { count: family.faces.length })} ·{" "}
-                  {family.formats.join(" · ").toUpperCase()}
-                </span>
-              </span>
-              <span
-                className="specimen-strip"
-                aria-hidden="true"
-                style={{
-                  fontFamily: fontFamily ?? undefined,
-                  fontStyle: lead.italic ? "italic" : "normal",
-                  fontVariationSettings: variation,
-                  fontFeatureSettings: featureSettings,
-                }}
-              >
-                ABCDEFGHIJKLM abcdefghijklm 0123456789 ?!&
-              </span>
-            </motion.section>
-
-            {/* A catalogue family has no family-wide switch: every style is
-                installed on its own, from the style list below. */}
-            {!catalogue && (
-              <motion.section
-                className="detail-activate"
-                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-              >
-                <div>
-                  <div className="activate-label">{t(family.active ? "detail.active" : "detail.inactive")}</div>
-                  <div className="activate-sub">
-                    {t(family.deactivatable ? "detail.visibleElsewhere" : "detail.systemFont")}
-                  </div>
-                </div>
-                <PillToggle
-                  on={family.active}
-                  disabled={!family.deactivatable}
-                  onChange={(on) => void setFamilyActive(family.name, on)}
-                  label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
-                  size="lg"
-                />
-              </motion.section>
-            )}
 
             <motion.section
               className="detail-waterfall"
@@ -943,6 +919,7 @@ export function DetailPanel() {
               >
                 <div className="detail-heading detail-heading-row">
                   <span>{t("detail.glyphs")}</span>
+                  <GlyphSizeControls />
                   <span className="detail-heading-note">
                     <Copy size={10} strokeWidth={1.5} /> {t("detail.clickToCopy")}
                   </span>

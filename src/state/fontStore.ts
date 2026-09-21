@@ -178,6 +178,7 @@ interface FontStore {
   notes: Record<string, string>;
   trash: TrashEntry[];
   panelWidth: number;
+  detailPanelOpen: boolean;
   sidebarWidth: number;
 
   selection: string[];
@@ -254,6 +255,7 @@ interface FontStore {
   setFamiliesActiveBulk: (families: string[], active: boolean) => Promise<void>;
   applyFamilyInApp: (family: string, app: AdobeApp) => Promise<void>;
   setPanelWidth: (w: number) => void;
+  setDetailPanelOpen: (open: boolean) => void;
   setSidebarWidth: (w: number) => void;
   selectWith: (family: string, mode: "single" | "toggle" | "range", order: string[]) => void;
   selectAllVisible: () => void;
@@ -393,6 +395,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   notes: {},
   trash: [],
   panelWidth: 348,
+  detailPanelOpen: false,
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   selection: [],
   visibleOrder: [],
@@ -401,7 +404,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   settingsOpen: false,
   settingsCategory: "language",
   paletteOpen: false,
-  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true },
+  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true, glyphSize: 16 },
   affinityConnection: null,
   adobeAvailable: false,
   motionPref: "system",
@@ -482,7 +485,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
           : "name",
         panelWidth:
           typeof prefs.panelWidth === "number"
-            ? Math.min(560, Math.max(300, prefs.panelWidth))
+            ? Math.min(800, Math.max(300, prefs.panelWidth))
             : 348,
         sidebarWidth:
           typeof prefs.sidebarWidth === "number"
@@ -1300,18 +1303,16 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   selectWith: (family, mode, order) => {
-    // Selection only — never touches selectedFamily (the detail panel).
-    // The panel opens exclusively via the info button (select()).
     const { selection } = get();
     if (mode === "single" && selection.length === 1 && selection[0] === family) {
-      set({ selection: [] });
+      set({ selection: [family], selectedFamily: family });
       return;
     }
     if (mode === "toggle") {
       const next = selection.includes(family)
         ? selection.filter((f) => f !== family)
         : [...selection, family];
-      set({ selection: next });
+      set({ selection: next, selectedFamily: next[next.length - 1] ?? null });
       return;
     }
     if (mode === "range") {
@@ -1321,18 +1322,19 @@ export const useFontStore = create<FontStore>((set, get) => ({
         const b = order.indexOf(family);
         if (a !== -1 && b !== -1) {
           const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
-          set({ selection: [...new Set([...selection, ...range])] });
+          const next = [...new Set([...selection, ...range])];
+          set({ selection: next, selectedFamily: next[next.length - 1] ?? null });
           return;
         }
       }
     }
-    set({ selection: [family] });
+    set({ selection: [family], selectedFamily: family });
   },
 
   selectAllVisible: () => {
     const order = get().visibleOrder;
     if (order.length === 0) return;
-    set({ selection: [...order] });
+    set({ selection: [...order], selectedFamily: order[order.length - 1] ?? null });
   },
 
   openCompare: (families) => set({ compare: families.slice(0, 4), comparePicking: false }),
@@ -1347,11 +1349,12 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
 
   togglePick: (family) =>
-    set((s) => ({
-      selection: s.selection.includes(family)
+    set((s) => {
+      const next = s.selection.includes(family)
         ? s.selection.filter((f) => f !== family)
-        : [...s.selection, family],
-    })),
+        : [...s.selection, family];
+      return { selection: next, selectedFamily: next[next.length - 1] ?? null };
+    }),
   setSettingsOpen: (settingsOpen, category) =>
     set({
       settingsOpen,
@@ -1463,9 +1466,10 @@ export const useFontStore = create<FontStore>((set, get) => ({
   setDuplicateReport: (duplicateReport) => set({ duplicateReport }),
 
   setPanelWidth: (panelWidth) => {
-    set({ panelWidth: Math.min(560, Math.max(300, panelWidth)) });
+    set({ panelWidth: Math.min(800, Math.max(300, panelWidth)) });
     persistPrefs(get);
   },
+  setDetailPanelOpen: (detailPanelOpen) => set({ detailPanelOpen }),
 
   setSidebarWidth: (sidebarWidth) => {
     set({
@@ -1658,8 +1662,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
       selection: [],
     })),
   setArea: (area) => set({ area, selectedFamily: null, selection: [] }),
-  select: (selectedFamily) =>
-    set({ selectedFamily, selection: selectedFamily ? [selectedFamily] : [] }),
+  select: (selectedFamily) => {
+    set({ selectedFamily, selection: selectedFamily ? [selectedFamily] : [] });
+  },
 }));
 
 const styleOrder = (f: FontFace) => f.weight * 2 + (f.italic ? 1 : 0);

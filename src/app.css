@@ -336,9 +336,38 @@
   background: var(--e1);
 }
 .nav-row.nav-tag {
-  min-height: 28px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  margin: 2px 22px 2px 0;
+  padding: 2px 6px 2px 8px;
   background: var(--e2);
   border: 1px solid rgba(var(--ink-rgb), 0.16);
+  border-radius: 4px;
+  font-size: var(--fs-10);
+}
+.sidebar-cols .nav-row.nav-tag {
+  justify-self: start;
+}
+.nav-row.nav-tag .nav-label { flex: none; }
+.nav-row.nav-tag .nav-count {
+  position: absolute;
+  left: calc(100% + 6px);
+  color: var(--text-tertiary);
+}
+.sidebar-cols:has(.nav-row.nav-tag) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2px;
+}
+.sidebar-cols:has(.nav-row.nav-tag) > .nav-row.nav-tag {
+  border-left: 1px solid rgba(var(--ink-rgb), 0.16);
+  padding-left: 8px;
+}
+@container (min-width: 540px) {
+  .sidebar-cols:has(.nav-row.nav-tag) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 .nav-row.nav-tag:hover:not(.nav-active) {
   background: var(--e3);
@@ -347,6 +376,15 @@
 .nav-row.nav-tag.nav-active {
   border-color: transparent;
 }
+.nav-row.nav-drop-target {
+  color: var(--accent-a);
+  background: color-mix(in srgb, var(--accent-a) 14%, var(--e2));
+  border-color: var(--accent-a);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-a) 18%, transparent);
+  transform: translateY(-1px) scale(1.015);
+}
+.nav-row.nav-drop-target .nav-icon,
+.nav-row.nav-drop-target .nav-count { color: var(--accent-a); }
 /* A selected row keeps its white-on-accent look on hover — otherwise the
    hover text color would turn it dark (unreadable in the light scheme). */
 .nav-row.nav-active:hover {
@@ -515,6 +553,41 @@
   z-index: 1;
   outline: none;
   cursor: pointer;
+}
+.app-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.detail-panel-toggle {
+  display: grid;
+  place-items: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-left: auto;
+  border: 1px solid rgba(var(--ink-rgb), 0.08);
+  border-radius: 5px;
+  color: var(--text-tertiary);
+  background: var(--e1);
+  transition: background var(--t-quick) ease, color var(--t-quick) ease, border-color var(--t-quick) ease;
+}
+.detail-panel-toggle:hover {
+  color: var(--accent-a);
+  border-color: color-mix(in srgb, var(--accent-a) 42%, transparent);
+}
+.detail-panel-toggle-icon { width: 17px; height: 17px; }
+.detail-panel-toggle-pane { fill: transparent; }
+.detail-panel-toggle-active {
+  color: var(--text-secondary);
+  background: var(--e1);
+  border-color: color-mix(in srgb, var(--accent-a) 42%, transparent);
+}
+.detail-panel-toggle-active .detail-panel-toggle-pane { fill: var(--accent-a); stroke: var(--accent-a); }
+.sidebar-version {
+  font-size: var(--fs-10);
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 .topbar-size input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
@@ -899,7 +972,7 @@
 .family-card {
   position: relative;
   border-radius: 8px;
-  padding: 16px 92px 16px 18px;
+  padding: 16px 18px;
   cursor: pointer;
   background: rgba(var(--ink-rgb), 0.04);
   border: 1px solid rgba(var(--ink-rgb), 0.07);
@@ -912,6 +985,14 @@
   border-color: rgba(var(--ink-rgb), 0.11);
 }
 .family-card.card-expanded::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent-a);
+  pointer-events: none;
+}
+.family-card.card-selected::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
@@ -937,34 +1018,6 @@
 .grid-row .family-card.card-selected:hover {
   background: none;
   border-color: transparent;
-}
-.grid-row .card-info-strip {
-  border-left-color: transparent;
-}
-
-.card-info-strip {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 76px;
-  display: grid;
-  place-items: center;
-  border-left: 1px solid rgba(var(--ink-rgb), 0.07);
-  color: var(--text-tertiary);
-  transition: background var(--t-quick) ease, color var(--t-quick) ease,
-    transform var(--t-micro) ease;
-}
-.card-info-strip:hover {
-  background: color-mix(in srgb, var(--accent-a) 14%, transparent);
-  color: var(--accent-a);
-}
-.card-info-strip:active {
-  transform: scale(0.96);
-}
-.card-info-strip-open {
-  background: color-mix(in srgb, var(--accent-a) 14%, transparent);
-  color: var(--accent-a);
 }
 
 .card-head {
@@ -1306,9 +1359,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--fs-11);
+  font-size: var(--fs-10);
   font-weight: 500;
-  padding: 4px 7px 4px 10px;
+  padding: 2px 6px 2px 8px;
   border-radius: 4px;
   background: var(--e2);
   border: 1px solid rgba(var(--ink-rgb), 0.16);
@@ -1362,18 +1415,17 @@
   border-color: transparent;
   color: #fff;
 }
-/* The "+ Add tag" button in the font list: same frame as the tag chips,
-   uppercase and a touch smaller, but transparent (no fill). */
+/* The add-tag control is intentionally a peer of the existing tag chips. */
 .tag-add {
-  font-size: var(--fs-11);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--fs-10);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--text-tertiary);
-  background: transparent;
+  background: var(--e2);
   border: 1px solid rgba(var(--ink-rgb), 0.16);
   border-radius: 4px;
-  padding: 4px 8px;
+  padding: 2px 6px 2px 8px;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -2586,7 +2638,7 @@
 
 .glyph-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--glyph-cell-size, 34px), 1fr));
   gap: 3px;
   border: 1px solid rgba(var(--ink-rgb), 0.06);
   border-radius: 8px;
@@ -2601,7 +2653,7 @@
   place-items: center;
   aspect-ratio: 1;
   border-radius: 4px;
-  font-size: var(--fs-16);
+  font-size: var(--glyph-size, var(--fs-16));
   color: var(--text-primary);
   transition: background var(--t-quick) ease, transform var(--t-micro) ease;
 }
@@ -2611,6 +2663,32 @@
 }
 .glyph-cell:active {
   transform: scale(0.92);
+}
+.glyph-size-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.glyph-size-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-secondary);
+  border: 1px solid rgba(var(--ink-rgb), 0.08);
+  border-radius: 5px;
+  background: var(--e1);
+  transition: background var(--t-quick) ease, color var(--t-quick) ease;
+}
+.glyph-size-button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--e2);
+}
+.glyph-size-button:disabled {
+  cursor: default;
+  opacity: 0.38;
 }
 .glyph-cell:hover::after {
   content: attr(data-cp);
@@ -2628,6 +2706,23 @@
   padding: 2px 6px;
   white-space: nowrap;
   pointer-events: none;
+}
+.glyph-hover-preview {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  min-width: 1.35em;
+  min-height: 1.35em;
+  padding: 0.18em;
+  line-height: 1;
+  color: var(--text-primary);
+  background: var(--tooltip-bg);
+  border: 1px solid rgba(var(--ink-rgb), 0.16);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(var(--ink-rgb), 0.2);
+  cursor: none;
+  translate: -50% -50%;
 }
 .glyph-skeleton {
   height: 120px;
@@ -2659,6 +2754,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: 10px;
   font-size: var(--fs-10);
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -3223,6 +3319,15 @@
   border: none;
   color: var(--text-secondary);
 }
+.sidebar-reset-all {
+  margin-right: 4px;
+  padding: 2px 4px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-10);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.sidebar-reset-all:hover { color: var(--accent-a); }
 .settings-folder-path {
   flex: 1;
   overflow: hidden;

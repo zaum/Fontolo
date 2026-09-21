@@ -1,8 +1,53 @@
 # Fontolo — Changelog
 
-* **Total commits:** 14
+* **Total commits:** 28
 * **Date range:** 2026-09-19 – 2026-09-21
 * **Environment / Context:** Main branch maintenance, scan performance, and UI refinement
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🎨 UI/UX · Focused Glyph Inspection
+* Removed the information panel's favorite, close, specimen, and family activation controls while retaining the format badge and font name in its first row.
+* Added a click-triggered preview that enlarges a glyph fivefold, keeps the existing clipboard copy action, remains visible while the pointer is over it, hides the cursor within the preview, and closes on the next glyph click.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🎨 UI/UX · Wider Resizable Information Panel
+* Increased the maximum width of the right-side information panel from 560 px to 800 px while retaining its 300 px minimum and persisted width preference.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🎨 UI/UX · Adjustable Glyph Map Size
+* Added compact decrease and zoom-in controls above the glyph map to resize glyphs in clear four-pixel steps.
+* Remembered the selected size globally in the application settings, including across restarts, rather than storing it per font.
+* Kept the glyph grid responsive at every supported size, added breathing room before the copy hint, and included translated accessible labels for the controls.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🎨 UI/UX · Streamline Font Details and Sidebar Assignment
+* Replaced the per-card details strip with a dedicated toolbar control whose highlighted inset panel indicates that font details are visible.
+* Kept the details panel beneath the toolbar and refreshed it for the active single font selection without allowing card clicks to open or close it.
+* Added drag-and-drop assignment for one or more selected font families onto sidebar tags and collections, including an accent-highlighted drop target.
+* Restyled sidebar tags as smaller outlined chips matching font-card tags, added a Browse-level Reset All action, and right-aligned the smaller Settings version label.
+* Added the selected-card accent rail and retained the filled yellow conflict indicator.
+* Ensured every non-empty font list selects its first available family when navigation or filtering replaces the previous selection, so the details control always has content.
+* Made the Add tag control use the same compact filled chip treatment as the assigned font tags.
+* Preserved an active font when the current card is clicked again or when a multi-selection changes, keeping the details panel available at all times.
+* Changed sidebar tag filters from full-width rows to compact, content-width outlined chips.
+* Moved the details panel into the workspace below the toolbar so its width never reduces the top toolbar.
+* Kept the details-toggle pane visible while inactive and separated sidebar tag counts from their compact font-card-matching chips.
+* Restored an empty default selection, with plain clicks selecting one font and modifier clicks reserved for multi-selection.
+* Accepted sidebar tag and collection drop targets during all browser drag phases so Tauri's delayed custom MIME reporting no longer shows a prohibited-drop cursor.
+* Restored first-font selection when a non-empty list opens while retaining plain-click single selection and modifier-only multi-selection.
+* Made sidebar tags use two columns at narrow sidebar widths, expanding to three only when the sidebar is wide enough.
+
+`Direct Commit` · `pending`
 
 ---
 

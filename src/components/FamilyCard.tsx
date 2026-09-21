@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ChevronRight, Info, Star, X } from "lucide-react";
+import { AlertTriangle, ChevronRight, Star, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springBouncy, springSnappy, springSoft } from "../design/springs";
@@ -94,9 +94,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
   const setFamilyTags = useFontStore((s) => s.setFamilyTags);
-  const select = useFontStore((s) => s.select);
   const selected = useFontStore((s) => s.selection.includes(family.name));
-  const detailsOpen = useFontStore((s) => s.selectedFamily === family.name);
   const favorite = useFontStore((s) => s.favorites.includes(family.name));
   const toggleFavorite = useFontStore((s) => s.toggleFavorite);
   const hasActiveConflict = useFontStore((s) => activeConflictsFor(s.fonts).has(family.name));
@@ -144,6 +142,15 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
     <article
       className={`family-card ${selected ? "card-selected" : ""} ${expanded ? "card-expanded" : ""}`}
       data-family={family.name}
+      draggable
+      onDragStart={(e) => {
+        const st = useFontStore.getState();
+        const families = st.selection.includes(family.name) ? st.selection : [family.name];
+        if (!st.selection.includes(family.name)) st.selectWith(family.name, "single", st.visibleOrder);
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-fontolo-families", JSON.stringify(families));
+        e.dataTransfer.setData("text/plain", families.join("\n"));
+      }}
       onClick={(e) => {
         // Only the body toggles the style list — buttons (star, pill,
         // info strip, expander) handle themselves.
@@ -251,7 +258,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
               // only on a plain click; with modifiers the user is extending
               // a selection, don't clobber it. Never touches the detail panel.
               if (!st.comparePicking && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                useFontStore.setState({ selection: [family.name] });
+                useFontStore.setState({ selection: [family.name], selectedFamily: family.name });
               }
               setExpanded((v) => !v);
             }}
@@ -349,26 +356,6 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         )}
       </AnimatePresence>
 
-      <button
-        className={`card-info-strip ${detailsOpen ? "card-info-strip-open" : ""}`}
-        aria-label={t("card.openDetails", { name: family.name })}
-        title={t("card.openDetails", { name: family.name })}
-        onClick={() => {
-          const st = useFontStore.getState();
-          if (st.comparePicking) {
-            st.togglePick(family.name);
-            return;
-          }
-          // The info strip is the ONLY place that opens the detail panel.
-          if (detailsOpen) {
-            useFontStore.setState({ selectedFamily: null });
-          } else {
-            select(family.name);
-          }
-        }}
-      >
-        <Info size={17} strokeWidth={1.75} />
-      </button>
     </article>
   );
 });

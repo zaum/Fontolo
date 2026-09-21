@@ -136,6 +136,7 @@ export interface AppSettings {
   affinityEnabled: boolean;
   affinityDeactivateOnQuit: boolean;
   googleFontsEnabled: boolean;
+  glyphSize: number;
 }
 
 export interface AffinityConnection {

@@ -761,10 +761,16 @@ struct Settings {
     affinity_deactivate_on_quit: bool,
     #[serde(default = "default_google_fonts_enabled")]
     google_fonts_enabled: bool,
+    #[serde(default = "default_glyph_size")]
+    glyph_size: u8,
 }
 
 fn default_google_fonts_enabled() -> bool {
     true
+}
+
+fn default_glyph_size() -> u8 {
+    16
 }
 
 #[tauri::command]
@@ -779,6 +785,7 @@ fn get_settings(store: State<Store>) -> Result<Settings, String> {
         affinity_enabled: state.affinity_enabled,
         affinity_deactivate_on_quit: state.affinity_deactivate_on_quit,
         google_fonts_enabled: state.google_fonts_enabled,
+        glyph_size: state.glyph_size,
     })
 }
 
@@ -798,6 +805,7 @@ fn set_settings(
         state.affinity_enabled = settings.affinity_enabled;
         state.affinity_deactivate_on_quit = settings.affinity_deactivate_on_quit;
         state.google_fonts_enabled = settings.google_fonts_enabled;
+        state.glyph_size = settings.glyph_size.clamp(12, 32);
         store::save(&state)?;
     }
     allow_dir(

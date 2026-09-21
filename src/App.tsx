@@ -159,7 +159,16 @@ function MainContent() {
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);
 
   useEffect(() => {
-    useFontStore.setState({ visibleOrder });
+    const state = useFontStore.getState();
+    const selectedInView = state.selection.filter((family) => visibleOrder.includes(family));
+    // Entering a non-empty list starts on its first font. Subsequent plain
+    // clicks still replace this with exactly one selection; modifiers extend it.
+    const nextSelection = selectedInView.length > 0 ? selectedInView : visibleOrder.slice(0, 1);
+    useFontStore.setState({
+      visibleOrder,
+      selection: nextSelection,
+      selectedFamily: nextSelection[nextSelection.length - 1] ?? null,
+    });
   }, [visibleOrder]);
 
   if (area === "trash") return <TrashView />;
@@ -328,11 +337,13 @@ export default function App() {
           <Sidebar />
           <div className="app-main">
             <TopBar />
-            <main className="app-content">
-              <MainContent />
-            </main>
+            <div className="app-workspace">
+              <main className="app-content">
+                <MainContent />
+              </main>
+              <DetailPanel />
+            </div>
           </div>
-          <DetailPanel />
         </div>
       </div>
       <DropZone />
