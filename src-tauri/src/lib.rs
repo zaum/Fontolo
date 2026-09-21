@@ -5,6 +5,7 @@ mod font_types;
 mod google_fonts;
 mod installer;
 mod parser;
+mod preview;
 mod registry;
 mod scanner;
 mod sound;
@@ -921,6 +922,14 @@ fn google_cache_bytes() -> u64 {
     google_fonts::cache_bytes()
 }
 
+/// The standalone preview file of one face of a collection, generated on first
+/// request. `None` when the file is not a collection or the face cannot be
+/// written out small enough for the renderer.
+#[tauri::command]
+fn face_preview_asset(path: String, face_index: u32) -> Option<preview::PreviewAsset> {
+    preview::asset_for(std::path::Path::new(&path), face_index)
+}
+
 #[tauri::command]
 fn clear_google_cache() -> Result<u64, String> {
     google_fonts::clear_cache()
@@ -953,6 +962,12 @@ pub fn run() {
             // The preview cache is served to the webview through the asset
             // protocol, so its folder has to be in scope.
             allow_dir(app.handle(), &google_fonts::preview_dir());
+            // Single-face preview files generated for font collections live
+            // next to them, and are served the same way. They accumulate only
+            // for what was actually looked at, so the folder is trimmed here
+            // once per start instead of costing a check on every request.
+            allow_dir(app.handle(), &preview::preview_dir());
+            std::thread::spawn(preview::prune);
             // Clean up the version 1 Google Fonts mirror in the background: it
             // had downloaded a full TTF per family just to draw previews.
             let migrate_app = app.handle().clone();
@@ -990,6 +1005,7 @@ pub fn run() {
             peek_fonts,
             initial_fonts,
             warm_fonts,
+            face_preview_asset,
             set_font_active,
             set_fonts_active,
             set_fonts_active_session,
@@ -1055,6 +1071,7 @@ mod tests {
             id: id.to_string(),
             path: format!("/fonts/{id}.ttf"),
             preview_path: None,
+            is_collection: false,
             face_index: 0,
             family: "Inter".to_string(),
             style: "Regular".to_string(),

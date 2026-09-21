@@ -2,7 +2,8 @@
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import type { FontFace as ZFontFace, GooglePreviewFile } from "./ipc";
+import { ipc } from "./ipc";
+import type { FacePreviewAsset, FontFace as ZFontFace, GooglePreviewFile } from "./ipc";
 
 type LoadState = "loading" | "loaded" | "failed";
 interface CacheEntry {
@@ -11,10 +12,17 @@ interface CacheEntry {
   lastUsed?: number;
   /** Identity token used to ignore a load that was evicted while in flight. */
   loadId: number;
+  /** Estimated renderer cost of this preview, so the cache can stay bounded. */
+  bytes?: number;
   /** Exact browser faces registered for this entry, so eviction is cheap. */
   faces?: FontFace[];
 }
 const cache = new Map<string, CacheEntry>();
+/** Total estimated cost of what the cache holds. The entry limit alone is not
+ * enough now that one entry can be a 20 MB CJK face: dozens of those would be
+ * hundreds of megabytes decoded in the renderer. Visible previews stay pinned,
+ * so the ceiling only decides how much *extra* warm-up is worth keeping. */
+let cacheBytes = 0;
 const listeners = new Map<string, Set<() => void>>();
 const visiblePreviewNames = new Set<string>();
 let nextLoadId = 0;
@@ -34,10 +42,9 @@ function listenForPreviewGate(listener: () => void): () => void {
 }
 
 function schedulePreviewLoad(load: () => void): () => void {
-  // Yield the initial card paint, but do not wait for requestIdleCallback: a
-  // busy renderer can postpone that callback for seconds and make previews
-  // appear broken while the user scrolls.
-  const id = window.setTimeout(load, 40);
+  // Run after the card's first paint without adding an artificial delay to a
+  // newly visible preview. The bounded queue still limits concurrent decodes.
+  const id = window.setTimeout(load, 0);
   return () => window.clearTimeout(id);
 }
 
@@ -46,18 +53,24 @@ function schedulePreviewLoad(load: () => void): () => void {
 // A browser font is much more expensive than its file size: Chromium also
 // keeps decoded tables and glyph caches. Keeping 200 families could therefore
 // consume several GB, especially with CJK and variable fonts.
-// This covers the visible rows plus the grid's small overscan without making
-// mounted cards evict each other in a load/re-render loop.
-const FONT_CACHE_MAX = 16;
+// Keep a larger warm window for a stopped list, while the byte ceiling below
+// remains the authority for large CJK and variable faces.
+const FONT_CACHE_MAX = 48;
+// A generated preview asset holds one face, so a collection — the big ones are
+// CJK system fonts — can be previewed without handing the whole file to the
+// renderer. Combined with the entry limit above, this keeps the browser font
+// cache proportionate: a couple of large faces stay warm, and nothing else.
+const FONT_CACHE_BYTES = 192 * 1024 * 1024;
+
 const MAX_CONCURRENT_LOADS = 4;
 // Loading a full desktop CJK/variable font into Chromium can expand a 20–80 MB
-// file into hundreds of MB of renderer memory. Large fonts need a generated
-// preview asset; never decode the original file automatically in a card.
+// file into hundreds of MB of renderer memory, so a large local file is only
+// decoded when a generated preview asset stands in for it. `previewPath` is
+// exactly that: the backend writes one face of a collection out as a standalone
+// font, and the size check below deliberately only applies without one.
 const MAX_LOCAL_AUTO_PREVIEW_BYTES = 8 * 1024 * 1024;
 let activeLoads = 0;
-const loadQueue: Array<() => void> = [];
-let preloadTimer: number | undefined;
-const pendingPreloads = new Map<string, ZFontFace>();
+const loadQueue: Array<{ name: string; start: () => void }> = [];
 
 // A font can briefly fail while it is being written (install/activate);
 // keep the failure so cards render fast, but let a later view retry it.
@@ -77,12 +90,20 @@ function getState(name: string): LoadState | undefined {
   if (!entry) return undefined;
   if (entry.state === "failed" && entry.failedAt !== undefined) {
     if (Date.now() - entry.failedAt > FAILED_RETRY_MS) {
-      cache.delete(name);
+      dropEntry(name);
       return undefined;
     }
   }
   if (entry.state === "loaded") touch(name);
   return entry.state;
+}
+
+/** Forgets a cache entry and gives its estimated cost back to the budget. */
+function dropEntry(name: string): void {
+  const entry = cache.get(name);
+  if (!entry) return;
+  cacheBytes -= entry.bytes ?? 0;
+  cache.delete(name);
 }
 
 function notify(name: string): void {
@@ -91,23 +112,33 @@ function notify(name: string): void {
 }
 
 function removeEntry(name: string, entry: CacheEntry): void {
-  cache.delete(name);
+  dropEntry(name);
   for (const face of entry.faces ?? []) document.fonts.delete(face);
   // Wake imperative callers as well as hooks. They can retry if the entry is
   // still needed, instead of waiting forever for an evicted in-flight load.
   notify(name);
 }
 
-function enqueueLoad(load: () => Promise<void>): void {
+function prioritizeLoad(name: string): void {
+  const index = loadQueue.findIndex((job) => job.name === name);
+  if (index < 0) return;
+  const [job] = loadQueue.splice(index, 1);
+  loadQueue.unshift(job);
+}
+
+function enqueueLoad(name: string, load: () => Promise<void>, priority = false): void {
   const start = () => {
     activeLoads += 1;
     void load().finally(() => {
       activeLoads -= 1;
-      loadQueue.shift()?.();
+      loadQueue.shift()?.start();
     });
   };
   if (activeLoads < MAX_CONCURRENT_LOADS) start();
-  else loadQueue.push(start);
+  // A card that is now on screen must be next in line, ahead of the lookahead
+  // window queued for a scroll position the user has already passed.
+  else if (priority) loadQueue.unshift({ name, start });
+  else loadQueue.push({ name, start });
 }
 
 function cssName(face: ZFontFace): string {
@@ -122,19 +153,26 @@ function hash(s: string): string {
 }
 
 function evictIfNeeded(): void {
-  while (cache.size > FONT_CACHE_MAX) {
+  // Two limits, one decision: an entry count for the many small families and a
+  // byte ceiling for the few large ones. Pinned (visible) previews are never
+  // evicted, even when they alone exceed the ceiling — a card on screen must
+  // not fall back to the browser font while it is being looked at.
+  while (cache.size > FONT_CACHE_MAX || cacheBytes > FONT_CACHE_BYTES) {
     const oldest = [...cache.keys()].find((name) => !visiblePreviewNames.has(name));
     if (oldest === undefined) break;
     const entry = cache.get(oldest);
     if (entry) removeEntry(oldest, entry);
-    else cache.delete(oldest);
+    else dropEntry(oldest);
   }
 }
 
-/** One file of a preview: a cached web font and the ranges it covers. */
+/** One file of a preview: a cached web font and the ranges it covers. `bytes` is
+ * what decoding it costs the renderer; sources that do not report it fall back
+ * to the entry's estimate. */
 export interface PreviewSource {
   url: string;
   unicodeRange?: string;
+  bytes?: number;
 }
 
 /**
@@ -142,27 +180,61 @@ export interface PreviewSource {
  * is exactly how a webfont family works: each carries its own `unicode-range`,
  * so ASCII comes from the `latin` cut while Hungarian accented letters come
  * from `latin-ext`. Loading only one of them would show tofu boxes.
+ *
+ * `loadSources` resolves the files to register; a collection face asks the
+ * backend for its generated single-face asset here, which is why resolving is
+ * part of the load instead of happening before it. `bytes` is the estimated
+ * renderer cost of the preview, used only to keep the cache inside its budget.
+ * Resolving to nothing marks the entry failed, exactly like a font that cannot
+ * be decoded.
  */
-function ensureSources(name: string, sources: PreviewSource[]): void {
-  if (sources.length === 0) return;
-  if (getState(name) !== undefined) return;
+function ensureSources(
+  name: string,
+  loadSources: () => Promise<PreviewSource[]>,
+  bytes: number,
+  priority = true,
+): void {
+  const state = getState(name);
+  if (state !== undefined) {
+    if (state === "loading" && priority) prioritizeLoad(name);
+    return;
+  }
   const entry: CacheEntry = {
     state: "loading",
     lastUsed: Date.now(),
     loadId: ++nextLoadId,
+    bytes,
   };
   cache.set(name, entry);
+  cacheBytes += bytes;
   evictIfNeeded();
 
-  enqueueLoad(async () => {
-    // The card may have scrolled out and the entry may have been evicted while
-    // this job waited in the bounded queue. In that case never decode it.
-    if (cache.get(name)?.loadId !== entry.loadId) return;
-    const faces = sources.map((source) => {
-      const descriptors = source.unicodeRange ? { unicodeRange: source.unicodeRange } : undefined;
-      return new FontFace(name, `url("${source.url}")`, descriptors);
-    });
+  enqueueLoad(name, async () => {
     try {
+      // The card may have scrolled out and the entry may have been evicted
+      // while this job waited in the bounded queue. In that case never
+      // decode it.
+      if (cache.get(name)?.loadId !== entry.loadId) return;
+      const sources = await loadSources();
+      // Resolving can take a moment — the backend may have to write a 20 MB
+      // single-face font first — so re-check who is waiting for this entry.
+      if (cache.get(name)?.loadId !== entry.loadId) return;
+      if (sources.length === 0) {
+        entry.state = "failed";
+        entry.failedAt = Date.now();
+        return;
+      }
+      // A resolved source reports its real cost; update what this entry holds
+      // against the budget to it.
+      const resolved = sources.reduce((sum, source) => sum + (source.bytes ?? 0), 0);
+      if (resolved > 0) {
+        cacheBytes += resolved - (entry.bytes ?? 0);
+        entry.bytes = resolved;
+      }
+      const faces = sources.map((source) => {
+        const descriptors = source.unicodeRange ? { unicodeRange: source.unicodeRange } : undefined;
+        return new FontFace(name, `url("${source.url}")`, descriptors);
+      });
       const loaded = await Promise.all(faces.map((face) => face.load()));
       // An older implementation unconditionally registered completed loads.
       // That resurrected entries evicted during fast scrolling and bypassed
@@ -181,37 +253,78 @@ function ensureSources(name: string, sources: PreviewSource[]): void {
     } finally {
       if (cache.get(name)?.loadId === entry.loadId) notify(name);
     }
-  });
+  }, priority);
 }
 
-function ensureLoaded(face: ZFontFace): void {
-  const name = cssName(face);
-  ensureSources(name, [{ url: convertFileSrc(face.previewPath ?? face.path) }]);
+function ensureLoaded(face: ZFontFace, priority = true): void {
+  // The estimate reserves budget until the resolved sources report their real
+  // cost back; for a collection that is the whole file up front, replaced by
+  // the single generated face a moment later.
+  ensureSources(cssName(face), () => localSources(face), face.fileSize, priority);
 }
 
+/** How a local face reaches the renderer. A collection is always served from a
+ * generated asset — the webview would decode the collection's first face and
+ * every card would show those glyphs — while anything else uses its own file
+ * unless it is too large for the renderer to survive. */
+function previewSource(face: ZFontFace): "file" | "asset" | "none" {
+  if (face.previewPath) return "file";
+  if (face.isCollection) return "asset";
+  return face.fileSize > MAX_LOCAL_AUTO_PREVIEW_BYTES ? "none" : "file";
+}
+
+/** An unavailable face is exactly what the old size rule kept out of the
+ * renderer: too large, and no generated asset exists to stand in for it. */
 function localPreviewTooLarge(face: ZFontFace): boolean {
-  return face.previewPath === null && face.fileSize > MAX_LOCAL_AUTO_PREVIEW_BYTES;
+  return previewSource(face) === "none";
 }
 
-/** Queue a small window around the visible list without competing with paint. */
+/** The files a local face previews with, or an empty list when none of them can
+ * be decoded safely. A generated asset carries its own size, so the budget
+ * counts the single face instead of the whole collection. */
+async function localSources(face: ZFontFace): Promise<PreviewSource[]> {
+  const kind = previewSource(face);
+  if (kind === "none") return [];
+  if (kind === "file") return [{ url: convertFileSrc(face.previewPath ?? face.path) }];
+  const asset = await previewAssetFor(face);
+  if (asset) return [{ url: convertFileSrc(asset.path), bytes: asset.bytes }];
+  // The backend refused the face — too large to write out. A collection small
+  // enough for the renderer still previews from its own file; it would show
+  // the first face's glyphs, but that beats no preview at all.
+  if (face.fileSize <= MAX_LOCAL_AUTO_PREVIEW_BYTES) return [{ url: convertFileSrc(face.path) }];
+  return [];
+}
+
+/** The generated asset of one collection face, requested once and remembered.
+ * Failures are remembered too: a font the backend cannot serve must not be
+ * asked for again on every card render. */
+function previewAssetFor(face: ZFontFace): Promise<FacePreviewAsset | null> {
+  const key = `${face.path}\u0000${face.faceIndex}`;
+  let pending = assetRequests.get(key);
+  if (!pending) {
+    pending = ipc
+      .facePreviewAsset(face.path, face.faceIndex)
+      .catch(() => null)
+      .finally(() => {
+        // Keep the answer; the request bookkeeping itself can go.
+        window.setTimeout(() => assetRequests.delete(key), 30_000);
+      });
+    assetRequests.set(key, pending);
+  }
+  return pending;
+}
+const assetRequests = new Map<string, Promise<FacePreviewAsset | null>>();
+
+/** Warm a small lookahead window. Visible card loads jump ahead of this work. */
 export function preloadFaces(faces: ZFontFace[]): void {
   if (!previewEnabled) return;
   for (const face of faces) {
     if (face.source !== "google" && !localPreviewTooLarge(face)) {
-      pendingPreloads.set(face.id, face);
+      // Starting the asynchronous FontFace request immediately prevents a
+      // continuously moving scroll from repeatedly resetting a debounce timer.
+      ensureLoaded(face, false);
     }
   }
-  if (preloadTimer !== undefined) window.clearTimeout(preloadTimer);
-  preloadTimer = window.setTimeout(() => {
-    preloadTimer = undefined;
-    if (!previewEnabled) {
-      pendingPreloads.clear();
-      return;
-    }
-    const queued = [...pendingPreloads.values()];
-    pendingPreloads.clear();
-    for (const face of queued) ensureLoaded(face);
-  }, 80);
 }
 
 /** Keep the currently rendered cards in the browser font cache. Preloading
@@ -219,11 +332,10 @@ export function preloadFaces(faces: ZFontFace[]): void {
  * fall back to the browser default while it remains on screen. */
 export function setVisiblePreviewFaces(faces: ZFontFace[]): void {
   visiblePreviewNames.clear();
-  if (previewEnabled) {
-    for (const face of faces) {
-      if (face.source !== "google" && !localPreviewTooLarge(face)) {
-        visiblePreviewNames.add(cssName(face));
-      }
+  for (const face of faces) {
+    if (face.source !== "google" && !localPreviewTooLarge(face)) {
+      visiblePreviewNames.add(cssName(face));
+      prioritizeLoad(cssName(face));
     }
   }
   evictIfNeeded();
@@ -321,10 +433,10 @@ export function useGoogleFaceCss(
     const load = () => {
       ensureSources(
         name,
-        files.map((file) => ({
-          url: convertFileSrc(file.path),
-          unicodeRange: file.unicodeRange,
-        })),
+        // Web font cuts are a few tens of KB each; the byte budget only has to
+        // stay honest, not exact.
+        () => Promise.resolve(files.map((file) => ({ url: convertFileSrc(file.path), unicodeRange: file.unicodeRange }))),
+        files.length * 64 * 1024,
       );
       if (getState(name) !== "loading") return;
       const set = listeners.get(name) ?? new Set();

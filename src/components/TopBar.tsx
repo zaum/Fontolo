@@ -6,7 +6,6 @@ import {
   Filter,
   FoldVertical,
   Plus,
-  RefreshCw,
   Search,
   Type,
   UnfoldVertical,
@@ -409,33 +408,6 @@ function ExpandAllButton() {
   );
 }
 
-function RescanButton() {
-  const t = useT();
-  const rescan = useFontStore((s) => s.rescan);
-  const scanning = useFontStore((s) => s.phase === "scanning");
-  return (
-    <motion.button
-      className={`rescan-btn ${scanning ? "rescan-scanning" : ""}`}
-      aria-label={t("top.rescan")}
-      disabled={scanning}
-      onClick={() => void rescan()}
-      whileTap={{ scale: 0.94 }}
-    >
-      <motion.span
-        className="rescan-icon"
-        animate={scanning ? { rotate: 360 } : { rotate: 0 }}
-        transition={
-          scanning
-            ? { duration: 1.2, repeat: Infinity, ease: "linear" }
-            : { duration: 0.2 }
-        }
-      >
-        <RefreshCw size={14} strokeWidth={1.5} />
-      </motion.span>
-    </motion.button>
-  );
-}
-
 function CompareButton() {
   const t = useT();
   const selection = useFontStore((s) => s.selection);
@@ -536,8 +508,6 @@ export function TopBar() {
       <SortMenu />
 
       <CompareButton />
-
-      <RescanButton />
     </motion.header>
   );
 }

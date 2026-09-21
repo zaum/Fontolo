@@ -101,7 +101,7 @@ const CACHE_FORMAT: u32 = 1;
 
 /// Bump when parsing or metadata extraction changes: otherwise an older build's
 /// faces would be reused and hide the fix.
-const CACHE_REVISION: u32 = 1;
+const CACHE_REVISION: u32 = 2;
 
 /// Admission limits for retained parsed metadata, not for the visible library.
 const CACHE_LIMIT: usize = 40_000;
@@ -664,6 +664,7 @@ mod tests {
             id: id.to_string(),
             path: format!("/fonts/{id}.ttf"),
             preview_path: None,
+            is_collection: false,
             face_index: 0,
             family: "Inter".to_string(),
             style: "Regular".to_string(),

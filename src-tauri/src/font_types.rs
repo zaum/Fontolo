@@ -48,6 +48,10 @@ pub struct FontFace {
     pub path: String,
 
     pub preview_path: Option<String>,
+    /// Several faces in one file (`ttc` / `otc`). The webview can only decode
+    /// the first of them, so such a face needs a generated standalone file to
+    /// be previewed as itself.
+    pub is_collection: bool,
     pub face_index: u32,
     pub family: String,
     pub style: String,

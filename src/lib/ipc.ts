@@ -11,11 +11,20 @@ export interface VariationAxis {
   max: number;
 }
 
+/** A generated single-face preview file and its size, which is what the
+ * frontend's preview cache is budgeted against. */
+export interface FacePreviewAsset {
+  path: string;
+  bytes: number;
+}
+
 export interface FontFace {
   id: string;
   path: string;
 
   previewPath: string | null;
+  /** Several faces in one file; such a face needs a generated asset to preview. */
+  isCollection: boolean;
   faceIndex: number;
   family: string;
   style: string;
@@ -175,6 +184,10 @@ export const ipc = {
     invoke<void>("set_favorite", { family, favorite }),
   getCharset: (path: string, faceIndex: number) =>
     invoke<number[]>("get_charset", { path, faceIndex }),
+  // Only collections get an asset; a plain font previews its own file, so the
+  // answer is a single fast read of its header.
+  facePreviewAsset: (path: string, faceIndex: number) =>
+    invoke<FacePreviewAsset | null>("face_preview_asset", { path, faceIndex }),
   getFeatures: (path: string, faceIndex: number) =>
     invoke<string[]>("get_features", { path, faceIndex }),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),

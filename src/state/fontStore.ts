@@ -1746,6 +1746,7 @@ function virtualGoogleFace(family: string, style: GoogleStyle): FontFace {
     id: `google:${family}:${style.key}`,
     path: `google://${family}/${style.key}`,
     previewPath: null,
+    isCollection: false,
     faceIndex: 0,
     family,
     style: style.label,

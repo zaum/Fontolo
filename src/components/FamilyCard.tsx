@@ -303,35 +303,27 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
       </header>
 
       <div className="card-preview" style={{ minHeight: size * 1.35 }}>
-        <AnimatePresence mode="wait">
-          {fontFamily ? (
-            <motion.p
-              key="real"
-              className="preview-text"
-              style={{
-                fontFamily,
-                fontSize: size,
-                fontStyle: lead.italic ? "italic" : "normal",
-              }}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={spring}
-            >
-              {text}
-            </motion.p>
-          ) : failed ? (
-            <p key="failed" className="preview-text preview-failed">
-              {t("card.noPreview")}
-            </p>
-          ) : (
-            <motion.span
-              key="skeleton"
-              className="skeleton preview-skeleton"
-              style={{ height: size * 1.1 }}
-              exit={{ opacity: 0, transition: { duration: 0.1 } }}
-            />
-          )}
-        </AnimatePresence>
+        {fontFamily ? (
+          <motion.p
+            className="preview-text"
+            style={{
+              fontFamily,
+              fontSize: size,
+              fontStyle: lead.italic ? "italic" : "normal",
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={spring}
+          >
+            {text}
+          </motion.p>
+        ) : failed ? (
+          <p className="preview-text preview-failed">
+            {t("card.noPreview")}
+          </p>
+        ) : (
+          <span className="skeleton preview-skeleton" style={{ height: size * 1.1 }} />
+        )}
       </div>
 
       <AnimatePresence initial={false}>

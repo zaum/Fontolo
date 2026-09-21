@@ -604,6 +604,7 @@ export function Sidebar() {
         )}
         </AnimatePresence>
       </div>
+      <div className="sidebar-fixed-divider" role="separator" />
       </div>
       <div className="sidebar-scroll">
 
@@ -838,11 +839,10 @@ export function Sidebar() {
           pillId="nav-pill-footer"
           onPick={() => setSettingsOpen(true)}
           icon={<Settings size={15} strokeWidth={1.5} />}
-          label={t("side.settings")}
+          label={`${t("side.settings")} · v${APP_VERSION}`}
           index={i++}
           dataTour="settings"
         />
-        <div className="sidebar-version tabular">v{APP_VERSION}</div>
       </div>
     </motion.aside>
   );

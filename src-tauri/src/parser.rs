@@ -1,4 +1,5 @@
 use crate::font_types::{Classification, FontFace, FontFormat, FontSource, VariationAxis};
+use crate::preview;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -180,6 +181,7 @@ fn parse_face(
         id: format!("{}#{}", path_str, index),
         path: path_str,
         preview_path: None,
+        is_collection: false,
         face_index: index,
         family,
         style,
@@ -272,6 +274,7 @@ pub fn parse_font_file(path: &Path, source: FontSource) -> Vec<FontFace> {
             id: format!("{}#0", path_str),
             path: path_str,
             preview_path: None,
+            is_collection: false,
             face_index: 0,
             family: fallback_family(path),
             style: "Regular".to_string(),
@@ -297,8 +300,15 @@ pub fn parse_font_file(path: &Path, source: FontSource) -> Vec<FontFace> {
     }
 
     let count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
+    let collection = preview::is_collection(&data);
     (0..count)
         .filter_map(|i| parse_face(&data, i, path, format, file_size, source))
+        .map(|mut face| {
+            // Recorded here, because the frontend has to know that previewing
+            // this face means asking for a generated single-face file.
+            face.is_collection = collection;
+            face
+        })
         .collect()
 }
 

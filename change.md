@@ -1,8 +1,35 @@
 # Fontolo — Changelog
 
-* **Total commits:** 5
-* **Date range:** 2026-09-19 – 2026-09-20
+* **Total commits:** 14
+* **Date range:** 2026-09-19 – 2026-09-21
 * **Environment / Context:** Main branch maintenance, scan performance, and UI refinement
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🐛 Fixes · Faster Font Previews During Scrolling
+* Prioritized background preview caching in the active scroll direction so incoming font cards can render from warm browser font entries.
+* Restricted neighbour preloading to each card's visible lead style instead of queueing all hidden styles, preventing irrelevant font work from delaying visible previews.
+* Removed the card fade-in and skeleton shimmer so font previews appear immediately without a loading transition or moving highlight.
+* Restored a short fade for the completed preview text while keeping the loading placeholder static, and made visible previews take priority over background cache work.
+* Added an idle-only, two-sided background warm-up window and enlarged the bounded preview cache so more nearby fonts are ready before scrolling resumes.
+* Kept the current version inline with the Settings label in the sidebar footer.
+* Added a fixed divider beneath Browse so the scrolling Collections section remains visually separated.
+* Pinned only each collapsed card's visible lead style, promoted queued previews as soon as they became visible, and sized idle preloading to the renderer cache capacity to reduce wasted decoding.
+* Used idle time to cache additional styles of families currently on screen before warming nearby families, within the renderer memory limit.
+* Removed the manual refresh control from the toolbar while retaining other refresh paths.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-20</sub></sup> · 🐛 Fixes · Previews for Font Collections (TTC/OTC)
+* Wrote each face of a `.ttc`/`.otc` collection out as a standalone single-face font, so a collection no longer previews the glyphs of its first face for every style it contains.
+* Served those faces to the webview through the generated asset instead of the original file, which also removed the "preview unavailable" state that every system CJK collection above the 8 MB automatic decode budget was stuck with.
+* Generated assets only for faces that are actually on screen, kept them in a non-scanned cache folder next to the Google preview cache, and trimmed that folder to a byte budget so a large library cannot fill the disk with derived files.
+* Bounded the browser font cache by bytes as well as by entry count — the backend reports each generated file's own size, so the budget counts the single face instead of the whole collection — while visible previews stay pinned.
+* Verified the extraction against a reference splitter: all 36 Rust tests pass, and every generated face renders pixel-identically to the reference in the browser while different faces of the same collection render differently.
+
+`Direct Commit` · `pending`
 
 ---
 
