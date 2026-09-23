@@ -559,5 +559,6 @@
   "settings.lampSwapSub": "Le clic gauche active de façon permanente et le clic droit (ou Maj+clic gauche) active jusqu’à la fermeture. Verr. Maj active toujours jusqu’à la fermeture.",
   "infobar.lampDefault": "Voyant : clic gauche = permanent · clic droit ou Maj+clic gauche = jusqu’à la fermeture",
   "infobar.lampSwapped": "Voyant : clic gauche = jusqu’à la fermeture · clic droit ou Maj+clic gauche = permanent",
-  "infobar.capsLock": "Verr. Maj = toujours jusqu’à la fermeture"
+  "infobar.capsLock": "Verr. Maj = toujours jusqu’à la fermeture",
+  "infobar.doubleClick": "Double-clic sur une police = ouvrir les détails"
 }

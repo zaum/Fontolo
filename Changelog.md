@@ -1,10 +1,19 @@
 # Fontolo — Changelog
 
-* **Total commits:** 78
+* **Total commits:** 80
 * **Date range:** 2026-09-14 – 2026-09-23
 * **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, grid scroll stability, scan performance and Google Fonts rebuild
 
 ---
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Double-Click Opens the Detail Panel
+* Double-clicking a font card now opens the detail panel on the right for that family; plain single clicks keep their select-only behavior, and Ctrl/Shift clicks still extend the multi-selection without opening anything.
+* Compare-picking mode and the card's own buttons (lamp, star, expander, tag chips) are untouched — a double-click on them never opens the panel.
+* The bottom hint strip spells the gesture out next to the lamp legend, in all nine shipped languages.
+
+`Direct Commit` · `pending`
+
+---
+
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🐛 Fixes · WebView Autofill Popup Silenced on Text Fields
 * Disabled the WebView's built-in form autofill ("Saved info" suggestions) on every free-text input — the global search, the command palette, sample-text fields, the bulk-tag prompt and the collection/tag name editors — so Windows no longer drops a native suggestion popup over the interface while typing.
 * The suggestions were never an app feature: they came from the WebView2 control remembering previously typed values; every affected input now explicitly opts out with `autoComplete="off"`.

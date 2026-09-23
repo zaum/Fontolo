@@ -559,5 +559,6 @@
   "settings.lampSwapSub": "O clique esquerdo ativa permanentemente e o clique direito (ou Shift+clique esquerdo) ativa até sair. O Caps Lock ativa sempre até sair.",
   "infobar.lampDefault": "Lâmpada: clique esquerdo = permanente · clique direito ou Shift+clique esquerdo = até sair",
   "infobar.lampSwapped": "Lâmpada: clique esquerdo = até sair · clique direito ou Shift+clique esquerdo = permanente",
-  "infobar.capsLock": "Caps Lock = sempre até sair"
+  "infobar.capsLock": "Caps Lock = sempre até sair",
+  "infobar.doubleClick": "Clique duplo em uma fonte = abrir detalhes"
 }

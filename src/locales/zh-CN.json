@@ -545,5 +545,6 @@
   "settings.lampSwapSub": "左键永久激活，右键（或 Shift+左键）激活至退出。大写锁定始终激活至退出。",
   "infobar.lampDefault": "指示灯：左键 = 永久 · 右键或 Shift+左键 = 至退出",
   "infobar.lampSwapped": "指示灯：左键 = 至退出 · 右键或 Shift+左键 = 永久",
-  "infobar.capsLock": "大写锁定 = 始终至退出"
+  "infobar.capsLock": "大写锁定 = 始终至退出",
+  "infobar.doubleClick": "双击字体 = 打开详情"
 }

@@ -64,6 +64,10 @@ function InfoBar() {
         ·
       </span>
       <span className="infobar-item">{t("infobar.capsLock")}</span>
+      <span className="infobar-sep" aria-hidden="true">
+        ·
+      </span>
+      <span className="infobar-item">{t("infobar.doubleClick")}</span>
     </footer>
   );
 }

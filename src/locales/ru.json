@@ -570,5 +570,6 @@
   "settings.lampSwapSub": "Левый клик включает шрифт навсегда, правый клик (или Shift+левый клик) — до выхода. Caps Lock всегда включает до выхода.",
   "infobar.lampDefault": "Лампа: левый клик = навсегда · правый клик или Shift+левый клик = до выхода",
   "infobar.lampSwapped": "Лампа: левый клик = до выхода · правый клик или Shift+левый клик = навсегда",
-  "infobar.capsLock": "Caps Lock = всегда до выхода"
+  "infobar.capsLock": "Caps Lock = всегда до выхода",
+  "infobar.doubleClick": "Двойной клик по шрифту = открыть сведения"
 }

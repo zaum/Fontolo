@@ -537,5 +537,6 @@
   "settings.lampSwapSub": "左クリックで常時有効、右クリック（または Shift+左クリック）で終了まで有効になります。Caps Lock では常に終了まで有効です。",
   "infobar.lampDefault": "ランプ：左クリック = 常時 · 右クリックまたは Shift+左クリック = 終了まで",
   "infobar.lampSwapped": "ランプ：左クリック = 終了まで · 右クリックまたは Shift+左クリック = 常時",
-  "infobar.capsLock": "Caps Lock = 常に終了まで"
+  "infobar.capsLock": "Caps Lock = 常に終了まで",
+  "infobar.doubleClick": "フォントをダブルクリック = 詳細を開く"
 }
