@@ -12,7 +12,7 @@
 * Compare-picking mode and the card's own buttons (lamp, star, expander, tag chips) are untouched — a double-click on them never toggles the panel.
 * The bottom hint strip spells the gesture out next to the lamp legend, in all nine shipped languages.
 
-`Direct Commit` · `1f70bf7`
+`Direct Commit` · `7fd2750`
 
 ---
 
