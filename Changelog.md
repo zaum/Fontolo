@@ -2,7 +2,15 @@
 
 * **Total commits:** 76
 * **Date range:** 2026-09-14 – 2026-09-23
-* **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, scan performance and Google Fonts rebuild
+* **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, grid scroll stability, scan performance and Google Fonts rebuild
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🐛 Fixes · Grid No Longer Jumps on Activation
+* Activating a font re-publishes the library, which rebuilt the selection array with identical contents and re-fired the grid's scroll-to-selection effect — yanking the middle view back to the selected font while the user was reading a card further down.
+* The selection store now keeps the existing array whenever its contents did not actually change, and the grid's scroll effect only reacts when the focused family itself changes, so the scroll position stays put during activation, tag edits and background rescans.
+
+`Direct Commit` · `1f92ac2`
 
 ---
 

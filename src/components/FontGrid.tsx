@@ -113,13 +113,17 @@ export function FontGrid({ families }: { families: Family[] }) {
   useEffect(() => () => setVisiblePreviewFaces([]), []);
 
   useEffect(() => {
-    const focus =
-      selection.length > 0 ? selection[selection.length - 1] : selectedFamily;
+    const focus = selection.length > 0 ? selection[selection.length - 1] : selectedFamily;
+    // Effect deps are deliberately just this focus value: the library gets
+    // re-published whenever a font is activated, a tag is edited or a scan lands,
+    // and reacting to the selection array as well scrolled the grid back to
+    // the selected family — usually near the top — out from under the user.
     if (!focus) return;
     const idx = families.findIndex((f) => f.name === focus);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
 
-  }, [selectedFamily, selection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
 
   return (
     <div ref={parentRef} className="grid-scroll">

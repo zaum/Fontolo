@@ -182,10 +182,20 @@ function MainContent() {
     // Entering a non-empty list starts on its first font. Subsequent plain
     // clicks still replace this with exactly one selection; modifiers extend it.
     const nextSelection = selectedInView.length > 0 ? selectedInView : visibleOrder.slice(0, 1);
+    // Re-publishing the library (activation, tag edit, install, rescan) rebuilds
+    // the font array and with it the visible order. Handing the store a freshly
+    // built selection array in that case re-renders every selection consumer and
+    // re-fires effects that watch it — which scrolled the grid back to the
+    // selected font while the user was reading a card far below. Keep the old
+    // array whenever its contents did not actually change.
+    const unchanged =
+      nextSelection.length === state.selection.length &&
+      nextSelection.every((name, index) => name === state.selection[index]);
+    const nextSelected = nextSelection[nextSelection.length - 1] ?? null;
     useFontStore.setState({
       visibleOrder,
-      selection: nextSelection,
-      selectedFamily: nextSelection[nextSelection.length - 1] ?? null,
+      selection: unchanged ? state.selection : nextSelection,
+      selectedFamily: nextSelected === state.selectedFamily ? state.selectedFamily : nextSelected,
     });
   }, [visibleOrder]);
 
