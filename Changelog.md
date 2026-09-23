@@ -1,6 +1,6 @@
 # Fontolo — Changelog
 
-* **Total commits:** 77
+* **Total commits:** 78
 * **Date range:** 2026-09-14 – 2026-09-23
 * **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, grid scroll stability, scan performance and Google Fonts rebuild
 
@@ -9,7 +9,7 @@
 * Disabled the WebView's built-in form autofill ("Saved info" suggestions) on every free-text input — the global search, the command palette, sample-text fields, the bulk-tag prompt and the collection/tag name editors — so Windows no longer drops a native suggestion popup over the interface while typing.
 * The suggestions were never an app feature: they came from the WebView2 control remembering previously typed values; every affected input now explicitly opts out with `autoComplete="off"`.
 
-`Direct Commit` · `3e3ac59`
+`Direct Commit` · `52d0ed3`
 
 ---
 
