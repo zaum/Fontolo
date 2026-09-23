@@ -1,8 +1,8 @@
 # Fontolo — Changelog
 
-* **Total commits:** 73
+* **Total commits:** 76
 * **Date range:** 2026-09-14 – 2026-09-23
-* **Environment / Context:** Main branch development — scan performance, Google Fonts rebuild, and UI refinement
+* **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, scan performance and Google Fonts rebuild
 
 ---
 
@@ -11,10 +11,9 @@
 * Restored selections are validated against the fresh library, so a tag, collection or foundry that was deleted or renamed in the meantime is dropped instead of opening the app on a filter that can only ever be empty.
 * Whichever way the selection changes — a sidebar click, a Shift/Ctrl multi-select or a command palette jump — it is written together with the other UI preferences, and the sidebar's expanded sections keep their state alongside it.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `6723d74`
 
 ---
-
 
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Single Activation Lamp with Mouse Gestures
 * Replaced the two stacked lamps with one larger lamp per family, style row and waterfall header: left click activates permanently, right click or Shift+left click activates until quit, and Caps Lock always activates until quit.
@@ -22,7 +21,7 @@
 * Added an Auto activation setting that mirrors the roles — left click then holds fonts until quit and right click or Shift+left click activates permanently, with Caps Lock still until quit.
 * Session activation of a single style row now records its path, so that row's lamp turns yellow instead of green when it is only held until quit.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `c887ed4`
 
 ---
 
