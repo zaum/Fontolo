@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, Copy, Download, ExternalLink, FolderOpen, GripVertical, Plus, RotateCcw, Scale, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle, Download, ExternalLink, FolderOpen, GripVertical, RotateCcw, Scale, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PillToggle } from "../design/primitives/PillToggle";
 import { spring, springSoft } from "../design/springs";
@@ -13,10 +13,14 @@ import { FormatBadge } from "./FamilyCard";
 import { exportFace, exportFamily } from "../lib/menus";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { classifyLicense } from "../lib/license";
-import { playTag } from "../lib/sound";
 import { t as translate, useT, type TKey } from "../lib/i18n";
 
 const WATERFALL = [14, 20, 28, 40, 56];
+
+/** A web address inside free text: with a scheme, with a `www.` prefix, or a
+    bare domain — some fonts ship their homepage as the manufacturer name. */
+const WEB_URL =
+  /(?:https?:\/\/|www\.)[^\s<>"']+|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"']*)?/gi;
 
 function StyleRow({
   face,
@@ -309,10 +313,12 @@ function GlyphMap({
   face,
   fontFamily,
   variation,
+  onCount,
 }: {
   face: FontFace;
   fontFamily: string | null;
   variation?: string;
+  onCount?: (count: number | null) => void;
 }) {
   const t = useT();
   const glyphSize = useFontStore((s) => s.settings.glyphSize);
@@ -326,24 +332,35 @@ function GlyphMap({
 
   useEffect(() => {
     setShown(GLYPH_LIMIT);
+    setHoveredGlyph(null);
     const cached = charsetCache.get(face.id);
     if (cached) {
       setCps(cached);
+      onCount?.(cached.length);
       return;
     }
-    setCps(null);
+    // Keep the previous grid visible while the new charset loads: clearing
+    // to null flashed a skeleton on every style click.
     let alive = true;
     ipc
       .getCharset(face.previewPath ?? face.path, face.faceIndex)
       .then((list) => {
         charsetSet(face.id, list);
-        if (alive) setCps(list);
+        if (alive) {
+          setCps(list);
+          onCount?.(list.length);
+        }
       })
-      .catch(() => alive && setCps([]));
+      .catch(() => {
+        if (alive) {
+          setCps([]);
+          onCount?.(0);
+        }
+      });
     return () => {
       alive = false;
     };
-  }, [face.id, face.path, face.faceIndex]);
+  }, [face.id, face.path, face.faceIndex, onCount]);
 
   if (cps === null) {
     return <div className="skeleton glyph-skeleton" />;
@@ -374,6 +391,9 @@ function GlyphMap({
               onClick={(event) => {
                 if (hoveredGlyph) setHoveredGlyph(null);
                 else previewGlyph(event, ch);
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
                 navigator.clipboard
                   .writeText(ch)
                   .then(() => toast.success(t("glyph.copied", { ch }), `U+${hex}`, "tick"))
@@ -397,6 +417,10 @@ function GlyphMap({
               fontSize: `${glyphSize * 5}px`,
             }}
             onPointerLeave={() => setHoveredGlyph(null)}
+            onClick={(event) => {
+              event.stopPropagation();
+              setHoveredGlyph(null);
+            }}
           >
             {hoveredGlyph.character}
           </span>,
@@ -430,6 +454,35 @@ function NoteEditor({ family }: { family: string }) {
       spellCheck={false}
     />
   );
+}
+
+/** Renders a foundry value, turning any embedded web address into a link that
+    opens in the default browser — the same opener path as the licence link. */
+function FoundryValue({ value }: { value: string }) {
+  const t = useT();
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const m of value.matchAll(WEB_URL)) {
+    const start = m.index ?? cursor;
+    // A domain right after "@" belongs to an e-mail address, not a web link.
+    if (start > 0 && value[start - 1] === "@") continue;
+    const url = m[0].replace(/[.,;:!?)]+$/, "");
+    if (start > cursor) nodes.push(value.slice(cursor, start));
+    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    nodes.push(
+      <button
+        key={start}
+        className="detail-link"
+        title={href}
+        onClick={() => void openUrl(href).catch(() => toast.error(t("toast.couldntOpenLink")))}
+      >
+        {url}
+      </button>,
+    );
+    cursor = start + url.length;
+  }
+  if (cursor < value.length) nodes.push(value.slice(cursor));
+  return <>{nodes}</>;
 }
 
 function LicenseSection({ license, licenseUrl }: { license: string | null; licenseUrl: string | null }) {
@@ -466,67 +519,11 @@ function LicenseSection({ license, licenseUrl }: { license: string | null; licen
   );
 }
 
-function TagEditor({ family, tags }: { family: string; tags: string[] }) {
-  const t = useT();
-  const setFamilyTags = useFontStore((s) => s.setFamilyTags);
-  const [draft, setDraft] = useState("");
-
-  const add = () => {
-    const next = draft.trim().toLowerCase();
-    if (next && !tags.includes(next)) {
-      playTag(true);
-      void setFamilyTags(family, [...tags, next]);
-    }
-    setDraft("");
-  };
-
-  return (
-    <div className="tag-editor">
-      <AnimatePresence>
-        {tags.map((tag) => (
-          <motion.span
-            key={tag}
-            className="tag-chip"
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.85 }}
-            transition={spring}
-            layout
-          >
-            {tag}
-            <button
-              aria-label={t("tag.removeAria", { tag })}
-              onClick={() => {
-                playTag(false);
-                void setFamilyTags(family, tags.filter((x) => x !== tag));
-              }}
-            >
-              <X size={11} strokeWidth={1.5} />
-            </button>
-          </motion.span>
-        ))}
-      </AnimatePresence>
-      <div className="tag-input">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder={t("tag.addPlaceholder")}
-          aria-label={t("tag.addAria")}
-          spellCheck={false}
-        />
-        <button aria-label={t("tag.addAria")} onClick={add} disabled={!draft.trim()}>
-          <Plus size={13} strokeWidth={1.5} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function ConflictFileCard({ path }: { path: string }) {
   const t = useT();
   const fonts = useFontStore((s) => s.fonts);
   const setFontFileActive = useFontStore((s) => s.setFontFileActive);
+  const activationPending = useFontStore((s) => s.activationPending.includes(path));
   const uninstallFontFile = useFontStore((s) => s.uninstallFontFile);
   const faces = fonts.filter((f) => f.path === path);
   const rep = faces[0] ?? null;
@@ -576,7 +573,8 @@ function ConflictFileCard({ path }: { path: string }) {
             <span className="activate-label">{t(isActive ? "detail.active" : "detail.inactive")}</span>
             <PillToggle
               on={isActive}
-              disabled={!canToggle}
+              disabled={!canToggle || activationPending}
+              pending={activationPending}
               onChange={(on) => void setFontFileActive(path, on)}
               label={t(isActive ? "card.deactivate" : "card.activate", { name: pathBasename(path) })}
             />
@@ -635,6 +633,7 @@ export function DetailPanel() {
     : null;
 
   const [styleId, setStyleId] = useState<string | null>(null);
+  const [glyphCount, setGlyphCount] = useState<number | null>(null);
   const [axisValues, setAxisValues] = useState<Record<string, number>>({});
 
   const [features, setFeatures] = useState<string[]>([]);
@@ -643,6 +642,7 @@ export function DetailPanel() {
     setStyleId(null);
     setAxisValues({});
     setFeatureOverrides({});
+    setGlyphCount(null);
   }, [selectedFamily]);
 
   const lead =
@@ -659,7 +659,19 @@ export function DetailPanel() {
       : catalogue?.styles[0]?.key ?? "400";
   const google = useGoogleCss(catalogue?.family ?? "", catalogueStyle);
   const localCss = useFontCss(catalogue ? null : lead);
-  const fontFamily = catalogue ? google.fontFamily : localCss.fontFamily;
+  const fontFamilyLive = catalogue ? google.fontFamily : localCss.fontFamily;
+  // Preview fonts load on demand: hold the last loaded family name (for the
+  // same font family) so clicking a not-yet-loaded style doesn't flash the UI
+  // fallback font in the glyph grid and waterfall.
+  const fontHoldRef = useRef<{ family: string; name: string } | null>(null);
+  if (fontFamilyLive && family) {
+    fontHoldRef.current = { family: family.name, name: fontFamilyLive };
+  }
+  const fontFamily =
+    fontFamilyLive ??
+    (fontHoldRef.current && fontHoldRef.current.family === family?.name
+      ? fontHoldRef.current.name
+      : null);
   const text = family ? resolveSampleText(sampleText, sampleUseFontName, family.name) : "";
   const ensureGoogleMeta = useFontStore((s) => s.ensureGoogleMeta);
 
@@ -668,16 +680,23 @@ export function DetailPanel() {
   }, [catalogue, ensureGoogleMeta]);
 
   useEffect(() => {
-    setFeatures([]);
     setFeatureOverrides({});
-    if (!lead || lead.format === "woff" || lead.format === "woff2") return;
+    if (!lead || lead.format === "woff" || lead.format === "woff2") {
+      setFeatures([]);
+      return;
+    }
+    // Keep the previous style's chips mounted while this style's feature
+    // list loads: clearing to [] unmounted the section and made the glyph
+    // panel below jump twice on every style click.
     let stale = false;
     ipc
       .getFeatures(lead.previewPath ?? lead.path, lead.faceIndex)
       .then((tags) => {
         if (!stale) setFeatures(tags.filter((t) => featureLabel(t) !== null));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!stale) setFeatures([]);
+      });
     return () => {
       stale = true;
     };
@@ -738,28 +757,6 @@ export function DetailPanel() {
               <h2 className="detail-title">{family.name}</h2>
             </motion.header>
 
-            <motion.section
-              className="detail-waterfall"
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-            >
-              {WATERFALL.map((px) => (
-                <p
-                  key={px}
-                  className="waterfall-line"
-                  style={{
-                    fontFamily: fontFamily ?? undefined,
-                    fontSize: px,
-                    fontStyle: lead.italic ? "italic" : "normal",
-                    fontVariationSettings: variation,
-                    fontFeatureSettings: featureSettings,
-                  }}
-                >
-                  <span className="waterfall-px tabular">{px}</span>
-                  {text}
-                </p>
-              ))}
-            </motion.section>
-
             {lead.isVariable && lead.axes.length > 0 && (
               <motion.section
                 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
@@ -802,10 +799,6 @@ export function DetailPanel() {
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
             >
               <dl>
-                <dt>{t("detail.styles")}</dt>
-                <dd className="tabular">{family.faces.length}</dd>
-                <dt>{t("detail.format")}</dt>
-                <dd>{family.formats.join(", ").toUpperCase()}</dd>
                 {family.classification !== "unknown" && (
                   <>
                     <dt>{t("detail.class")}</dt>
@@ -818,12 +811,10 @@ export function DetailPanel() {
                     <dd>{family.scripts.map(scriptLabel).join(", ")}</dd>
                   </>
                 )}
-                <dt>{t("detail.fileSize")}</dt>
-                <dd className="tabular">{formatBytes(family.totalSize)}</dd>
                 {family.foundry && (
                   <>
                     <dt>{t("detail.foundry")}</dt>
-                    <dd>{family.foundry}</dd>
+                    <dd><FoundryValue value={family.foundry} /></dd>
                   </>
                 )}
                 {lead.postscriptName && (
@@ -845,6 +836,8 @@ export function DetailPanel() {
                     <span>{lead.path}</span>
                   </button>
                 </dd>
+                <dt>{t("detail.fileSize")}</dt>
+                <dd className="tabular">{formatBytes(family.totalSize)}</dd>
                 {family.isVariable && lead.axes.length > 0 && (
                   <>
                     <dt>{t("detail.axes")}</dt>
@@ -862,7 +855,10 @@ export function DetailPanel() {
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
             >
               <div className="detail-heading detail-heading-row">
-                <span>{t("detail.styles")}</span>
+                <span>
+                  {t("detail.styles")}
+                  <span className="detail-count tabular"> {family.faces.length}</span>
+                </span>
                 <button
                   className="detail-heading-action"
                   onClick={() => void exportFamily(family)}
@@ -918,15 +914,45 @@ export function DetailPanel() {
                 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
               >
                 <div className="detail-heading detail-heading-row">
-                  <span>{t("detail.glyphs")}</span>
-                  <GlyphSizeControls />
-                  <span className="detail-heading-note">
-                    <Copy size={10} strokeWidth={1.5} /> {t("detail.clickToCopy")}
+                  <span>
+                    {t("detail.glyphs")}
+                    {glyphCount !== null && <span className="detail-count tabular"> {glyphCount}</span>}
                   </span>
+                  <span className="detail-heading-note">
+                    {t("detail.glyphZoomHint")} · {t("detail.clickToCopy")}
+                  </span>
+                  <GlyphSizeControls />
                 </div>
-                <GlyphMap face={lead} fontFamily={fontFamily} variation={variation} />
+                <GlyphMap
+                  face={lead}
+                  fontFamily={fontFamily}
+                  variation={variation}
+                  onCount={setGlyphCount}
+                />
               </motion.section>
             )}
+
+            <motion.section
+              className="detail-waterfall"
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
+            >
+              {WATERFALL.map((px) => (
+                <p
+                  key={px}
+                  className="waterfall-line"
+                  style={{
+                    fontFamily: fontFamily ?? undefined,
+                    fontSize: px,
+                    fontStyle: lead.italic ? "italic" : "normal",
+                    fontVariationSettings: variation,
+                    fontFeatureSettings: featureSettings,
+                  }}
+                >
+                  <span className="waterfall-px tabular">{px}</span>
+                  {text}
+                </p>
+              ))}
+            </motion.section>
 
             {(lead.license || lead.licenseUrl || catalogue?.license) && (
               <motion.section
@@ -939,13 +965,6 @@ export function DetailPanel() {
                 />
               </motion.section>
             )}
-
-            <motion.section
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}
-            >
-              <div className="detail-heading">{t("detail.tags")}</div>
-              <TagEditor family={family.name} tags={family.tags} />
-            </motion.section>
 
             <motion.section
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: spring } }}

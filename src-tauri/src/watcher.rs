@@ -2,6 +2,7 @@ use crate::parser;
 use notify::{Event, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 pub struct WatchHandle(pub Mutex<Option<notify::RecommendedWatcher>>);
@@ -10,18 +11,20 @@ pub struct WatchHandle(pub Mutex<Option<notify::RecommendedWatcher>>);
 /// an action (install, activation, Google style install) whose result is
 /// already known: rescanning the whole library for them is pure waste, and it
 /// is exactly what made style activation feel like two full scans in a row.
-type SelfChangeSet = std::sync::Mutex<std::collections::HashSet<PathBuf>>;
+type SelfChangeSet = std::sync::Mutex<std::collections::HashMap<PathBuf, Instant>>;
+
+const SELF_CHANGE_WINDOW: Duration = Duration::from_secs(2);
 
 fn self_change() -> &'static SelfChangeSet {
     static CELL: std::sync::OnceLock<SelfChangeSet> = std::sync::OnceLock::new();
-    CELL.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+    CELL.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 /// Marks a path as written by the app itself, so the arriving filesystem event
 /// is swallowed instead of triggering a rescan.
 pub fn own_write(path: &std::path::Path) {
     if let Ok(mut set) = self_change().lock() {
-        set.insert(path.to_path_buf());
+        set.insert(path.to_path_buf(), Instant::now() + SELF_CHANGE_WINDOW);
     }
 }
 
@@ -29,7 +32,11 @@ pub fn own_write(path: &std::path::Path) {
 fn is_own(path: &std::path::Path) -> bool {
     self_change()
         .lock()
-        .map(|mut set| set.remove(path))
+        .map(|mut set| {
+            let now = Instant::now();
+            set.retain(|_, until| *until > now);
+            set.get(path).is_some_and(|until| *until > now)
+        })
         .unwrap_or(false)
 }
 

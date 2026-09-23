@@ -226,6 +226,10 @@ pub fn install(
             InstallMode::Move => {
                 let file_name = src.file_name().map(|f| f.to_owned()).unwrap_or_default();
                 let dest = unique_dest(library, &file_name);
+                // A moved import is already parsed and returned to the
+                // frontend below. Suppress every create/modify event this
+                // write produces instead of starting a redundant full scan.
+                crate::watcher::own_write(&dest);
                 let moved = move_file(&src, &dest).map_err(|e| e.to_string());
                 let (ok, error) = match &moved {
                     Ok(()) => (true, None),

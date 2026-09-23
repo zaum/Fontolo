@@ -335,18 +335,34 @@ async fn peek_fonts(app: tauri::AppHandle) -> Result<Option<FontSnapshot>, Strin
 }
 
 #[tauri::command]
-fn set_font_active(store: State<Store>, path: String, active: bool) -> Result<(), String> {
-    let mut state = store.0.lock().map_err(|e| e.to_string())?;
-    activation::sync(&mut state, &path, active)?;
-    store::save(&state)
+async fn set_font_active(app: tauri::AppHandle, path: String, active: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store: State<Store> = app.state();
+        let mut state = store.0.lock().map_err(|e| e.to_string())?;
+        activation::sync(&mut state, &path, active)?;
+        store::save(&state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn set_fonts_active(store: State<Store>, paths: Vec<String>, active: bool) -> Result<(), String> {
-    let mut state = store.0.lock().map_err(|e| e.to_string())?;
-
-    activation::sync_many(&mut state, &paths, active)?;
-    store::save(&state)
+async fn set_fonts_active(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+    active: bool,
+) -> Result<(), String> {
+    // Windows must register each font file individually. Keep that system
+    // work off the command executor so a 50+ style family never starves the
+    // WebView event loop while its optimistic UI update remains responsive.
+    tauri::async_runtime::spawn_blocking(move || {
+        let store: State<Store> = app.state();
+        let mut state = store.0.lock().map_err(|e| e.to_string())?;
+        activation::sync_many(&mut state, &paths, active)?;
+        store::save(&state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -380,7 +396,10 @@ async fn install_fonts(
                 state.linked.insert(face.path.clone());
             }
         }
-        auto = state.auto_activate_imports && result.installed.len() < 64;
+        // Registering a large family can make Windows enumerate every face
+        // synchronously. Keep auto-activation to genuinely small imports;
+        // the complete family is still installed and can be activated later.
+        auto = state.auto_activate_imports && result.installed.len() <= 12;
         // One platform commit for the whole batch (Linux: single fc-cache run).
         let paths: Vec<String> = result.installed.iter().map(|f| f.path.clone()).collect();
         let _ = activation::sync_many(&mut state, &paths, auto);

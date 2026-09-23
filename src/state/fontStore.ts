@@ -174,6 +174,7 @@ interface FontStore {
   favorites: string[];
   sessionActivated: string[];
   affinityActivated: string[];
+  activationPending: string[];
   lastImported: string[];
   notes: Record<string, string>;
   trash: TrashEntry[];
@@ -391,6 +392,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   favorites: [],
   sessionActivated: [],
   affinityActivated: [],
+  activationPending: [],
   lastImported: [],
   notes: {},
   trash: [],
@@ -783,6 +785,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       ),
       sessionActivated: prevSession.filter((n) => n !== family),
       affinityActivated: prevAffinity.filter((n) => n !== family),
+      activationPending: [...new Set([...get().activationPending, ...paths])],
     });
     try {
       await ipc.setFontsActive(paths, active);
@@ -793,6 +796,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
         affinityActivated: prevAffinity,
       });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
+    } finally {
+      set({ activationPending: get().activationPending.filter((pending) => !paths.includes(pending)) });
     }
   },
 
@@ -837,12 +842,15 @@ export const useFontStore = create<FontStore>((set, get) => ({
       fonts: prevFonts.map((f) =>
         f.path === path && f.deactivatable ? { ...f, active } : f,
       ),
+      activationPending: [...new Set([...get().activationPending, path])],
     });
     try {
       await ipc.setFontsActive([path], active);
     } catch (e) {
       set({ fonts: prevFonts });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
+    } finally {
+      set({ activationPending: get().activationPending.filter((pending) => pending !== path) });
     }
   },
 
@@ -916,9 +924,9 @@ export const useFontStore = create<FontStore>((set, get) => ({
       if (result.installed.length > 0) {
         const families = [...new Set(result.installed.map((f) => f.family))];
         set({ fonts: [...get().fonts, ...result.installed], lastImported: families });
-        // Invalidate any older scan and refresh even when the watcher is off
-        // (linked imports can live outside every watched directory).
-        void get().rescan();
+        // The backend returns the parsed files from this import, including
+        // linked paths outside watched folders, so a synchronous full-library
+        // rescan would only repeat this expensive work after large families.
         persistPrefs(get);
         toast.success(
           families.length === 1
@@ -1237,6 +1245,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       ),
       sessionActivated: prevSession.filter((n) => !families.includes(n)),
       affinityActivated: prevAffinity.filter((n) => !families.includes(n)),
+      activationPending: [...new Set([...get().activationPending, ...paths])],
     });
     try {
       await ipc.setFontsActive(paths, active);
@@ -1251,6 +1260,8 @@ export const useFontStore = create<FontStore>((set, get) => ({
     } catch (e) {
       set({ fonts: prevFonts, sessionActivated: prevSession, affinityActivated: prevAffinity });
       toast.error(t("toast.bulkUpdateFailed"), String(e));
+    } finally {
+      set({ activationPending: get().activationPending.filter((pending) => !paths.includes(pending)) });
     }
   },
 

@@ -18,6 +18,7 @@ export function DropZone() {
   const libraryDir = useFontStore((s) => s.settings.libraryDir);
   const libraryDirEnabled = useFontStore((s) => s.settings.libraryDirEnabled);
   const moveRef = useRef<HTMLDivElement>(null);
+  const lastProgressPaint = useRef(0);
 
   // DOM drag events don't fire reliably during a native file drag, so the
   // active panel is picked from the cursor position Tauri reports instead.
@@ -58,6 +59,12 @@ export function DropZone() {
       }
     });
     const unlistenProgress = listen<InstallProgress>("install:progress", (e) => {
+      // A large family can contain dozens of files. Keep the UI smooth by
+      // painting at most about twelve intermediate progress frames a second,
+      // while always showing completion immediately.
+      const now = performance.now();
+      if (e.payload.done < e.payload.total && now - lastProgressPaint.current < 80) return;
+      lastProgressPaint.current = now;
       setProgress(e.payload);
     });
     return () => {

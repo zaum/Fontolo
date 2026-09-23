@@ -52,6 +52,9 @@
   --fs-40: 40px;
   --fs-56: 56px;
 
+  /* Shared size for every item count: nav, top bar, filters, cards, progress, panel headings, trash. */
+  --fs-count: 10px;
+
   --font-ui: "Inter Variable", "Inter", system-ui, "Segoe UI", "Microsoft YaHei",
     "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC",
     "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;

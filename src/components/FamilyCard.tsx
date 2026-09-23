@@ -38,6 +38,7 @@ function FacePreview({
   const fontFamily = virtual ? google.fontFamily : local.fontFamily;
   const failed = virtual ? google.failed : local.failed;
   const setFontFileActive = useFontStore((s) => s.setFontFileActive);
+  const activationPending = useFontStore((s) => s.activationPending.includes(face.path));
   const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
   const styleKey = face.id.split(":").pop() ?? "400";
   // While the desktop file is on its way, the switch already reads as on.
@@ -68,7 +69,8 @@ function FacePreview({
       <span className="face-toggle">
         <PillToggle
           on={virtual ? installing || face.active : face.active}
-          disabled={virtual ? installing : !face.deactivatable}
+          disabled={virtual ? installing : !face.deactivatable || activationPending}
+          pending={activationPending}
           onChange={(on) => {
             // A catalogue style has no file yet: switching it on downloads the
             // desktop font and activates it in one step.
@@ -93,6 +95,9 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
+  const activationPending = useFontStore((s) =>
+    family.faces.some((face) => s.activationPending.includes(face.path)),
+  );
   const setFamilyTags = useFontStore((s) => s.setFamilyTags);
   const selected = useFontStore((s) => s.selection.includes(family.name));
   const favorite = useFontStore((s) => s.favorites.includes(family.name));
@@ -152,7 +157,7 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         e.dataTransfer.setData("text/plain", families.join("\n"));
       }}
       onClick={(e) => {
-        // Only the body toggles the style list — buttons (star, pill,
+        // A plain click on the body only selects — buttons (star, pill,
         // info strip, expander) handle themselves.
         if ((e.target as HTMLElement).closest("button")) return;
         setArmedTag(null);
@@ -161,16 +166,13 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
           st.togglePick(family.name);
           return;
         }
-        // Opening the style list also selects the family (plain click) without
-        // opening the detail panel. With
-        // Ctrl/Shift the card behaves like a list row: toggle / extend the
-        // selection, so the Compare button can arm on multi-selection.
+        // A plain click selects the family without opening the detail
+        // panel. With Ctrl/Shift the card behaves like a list row: toggle /
+        // extend the selection, so the Compare button can arm on
+        // multi-selection.
         const mode =
           e.ctrlKey || e.metaKey ? "toggle" : e.shiftKey ? "range" : "single";
         st.selectWith(family.name, mode, st.visibleOrder);
-        // Single-face families have no style list to open — clicking only
-        // selects them, it never expands.
-        if (canExpand) setExpanded((v) => !v);
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
@@ -254,9 +256,9 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             onClick={(e) => {
               e.stopPropagation();
               const st = useFontStore.getState();
-              // Same as the card body: expanding selects the family — but
-              // only on a plain click; with modifiers the user is extending
-              // a selection, don't clobber it. Never touches the detail panel.
+              // Expanding also selects the family — but only on a plain
+              // click; with modifiers the user is extending a selection,
+              // don't clobber it. Never touches the detail panel.
               if (!st.comparePicking && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                 useFontStore.setState({ selection: [family.name], selectedFamily: family.name });
               }
@@ -302,7 +304,8 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         {!catalogue && (
           <PillToggle
             on={family.active}
-            disabled={!family.deactivatable}
+            disabled={!family.deactivatable || activationPending}
+            pending={activationPending}
             onChange={(on) => void setFamilyActive(family.name, on)}
             label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
           />

@@ -1,8 +1,64 @@
 # Fontolo — Changelog
 
-* **Total commits:** 28
-* **Date range:** 2026-09-19 – 2026-09-21
+* **Total commits:** 34
+* **Date range:** 2026-09-19 – 2026-09-23
 * **Environment / Context:** Main branch maintenance, scan performance, and UI refinement
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🎨 UI/UX · Location Truncation & Button-Only Style Expansion
+* Truncated the Location path to a single line with an ellipsis when it does not fit, while the hover tooltip still reveals the full path.
+* Restricted style-list expansion to the Styles count button, so a plain click on the card body only selects the family instead of opening the styles.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Clickable Foundry Web Links
+* Turned any web address embedded in the Foundry value into a clickable link that opens in the system default browser, following the licence link's existing opener and error toast.
+* Left foundry values without a URL as plain text and stripped trailing punctuation, so a closing period or parenthesis never becomes part of the address.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🎨 UI/UX · App-Wide Count Sizing
+* Introduced a global `--fs-count` token and applied it to every item count — sidebar Browse rows, top bar result count, filter chip, install progress, card style-count button, the trash status line, and the panel's Styles/Glyphs counts — set slightly smaller than before.
+* Documented the convention in `AGENTS.md` so future changes keep one count size everywhere.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🎨 UI/UX · Information Panel Layout Cleanup
+* Moved the waterfall preview block directly under the glyph map (or the Google catalogue preview) instead of the panel bottom, so large-size comparison sits right below the glyph grid.
+* Removed the format row and the tags block from the panel, and shrank the metadata labels such as file size and styles.
+* Changed the glyph grid so a left click zooms in and a right click copies the character, with the two gestures noted beside the Glyphs heading.
+* Made a second left click on the zoomed glyph close the preview, so the enlarged view toggles instead of requiring the pointer to move away.
+* Added live item counts after the Styles and Glyphs headings, tightened the style list line spacing for a more compact look, and stopped the glyph grid from flashing while a newly selected style's character set loads.
+* Kept the OpenType feature chips mounted while the next style's feature list loads, so the sections below — including the glyph grid — no longer jump on every style click.
+* Removed the Styles row from the metadata list, moved file size directly under location, and right-closed the left-click-to-zoom hint against the glyph size controls.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🛠️ Maintenance · Complete Locale Coverage
+* Translated every remaining English fallback key across all nine languages — empty states, sidebar sections, command palette destinations, settings, toasts, and Affinity help.
+* Added the plural forms each language needs for open-document and duplicate-skip counts.
+* Every locale now reports 100% coverage in `pnpm i18n:check`.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-21</sub></sup> · 🐛 Fixes · Responsive Large-Family Operations
+* Prevented an import from immediately scheduling a duplicate full-library rescan when the installer already returns its parsed font faces.
+* Suppressed repeated file-watcher events for files written by Fontolo and throttled intermediate import-progress paints to keep the interface responsive.
+* Limited automatic activation to imports of at most 12 font files, avoiding expensive bulk registration for large families while keeping every imported file available for manual activation.
+* Moved bulk activation and deactivation onto background workers, while showing a pending state on the affected controls until Windows completes its registry and font-resource operations.
+
+`Direct Commit` · `pending`
 
 ---
 

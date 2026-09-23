@@ -28,6 +28,9 @@ export function WaterfallView({ families }: { families: Family[] }) {
     selection.length > 0 ? selection[0] : selectedFamily;
   const family =
     (focus ? families.find((f) => f.name === focus) : null) ?? families[0] ?? null;
+  const activationPending = useFontStore((s) =>
+    family?.faces.some((face) => s.activationPending.includes(face.path)) ?? false,
+  );
   const lead =
     family?.faces.find((f) => f.style === "Regular") ?? family?.faces[0] ?? null;
   const catalogue = family?.google && !family.google.installed ? family.google : null;
@@ -71,7 +74,8 @@ export function WaterfallView({ families }: { families: Family[] }) {
           <span className="waterfall-toggle">
             <PillToggle
               on={virtual ? installing || family.active : family.active}
-              disabled={virtual ? installing : !family.deactivatable}
+              disabled={virtual ? installing : !family.deactivatable || activationPending}
+              pending={activationPending}
               onChange={(on) => {
                 if (virtual) {
                   if (on) void installGoogleStyle(family.name, styleKey);

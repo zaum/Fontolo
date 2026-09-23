@@ -5,21 +5,23 @@ import { playToggle } from "../../lib/sound";
 interface Props {
   on: boolean;
   disabled?: boolean;
+  pending?: boolean;
   onChange: (on: boolean) => void;
   label: string;
   size?: "sm" | "lg";
 }
 
-export function PillToggle({ on, disabled, onChange, label, size = "sm" }: Props) {
+export function PillToggle({ on, disabled, pending = false, onChange, label, size = "sm" }: Props) {
   const [pressed, setPressed] = useState(false);
 
   return (
     <motion.button
       role="switch"
       aria-checked={on}
+      aria-busy={pending || undefined}
       aria-label={label}
-      disabled={disabled}
-      className={`pill-toggle pill-${size} ${on ? "pill-on" : ""}`}
+      disabled={disabled || pending}
+      className={`pill-toggle pill-${size} ${on ? "pill-on" : ""} ${pending ? "pill-pending" : ""}`}
       // Toggle on pointerdown, not click: `click` is retargeted to the
       // nearest common ancestor when the pressed element moves or is
       // re-rendered mid-press (card whileTap/layout animations), which made
@@ -27,7 +29,7 @@ export function PillToggle({ on, disabled, onChange, label, size = "sm" }: Props
       // targets the element actually pressed.
       onPointerDown={(e) => {
         e.stopPropagation();
-        if (disabled) return;
+        if (disabled || pending) return;
         setPressed(true);
         playToggle(!on);
         onChange(!on);
@@ -41,7 +43,7 @@ export function PillToggle({ on, disabled, onChange, label, size = "sm" }: Props
         e.stopPropagation();
       }}
       onKeyDown={(e) => {
-        if (disabled) return;
+        if (disabled || pending) return;
         if (e.key !== "Enter" && e.key !== " ") return;
         e.preventDefault();
         playToggle(!on);
