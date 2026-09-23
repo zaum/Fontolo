@@ -339,6 +339,7 @@ function SampleMenu() {
                         }}
                         aria-label={t("sample.customAria")}
                         spellCheck={false}
+                        autoComplete="off"
                         className="sample-custom-input"
                       />
                       <button
@@ -368,6 +369,7 @@ function SampleMenu() {
                     placeholder={t("sample.addPlaceholder")}
                     aria-label={t("sample.addPlaceholder")}
                     spellCheck={false}
+                    autoComplete="off"
                     className="sample-custom-input"
                   />
                 </li>
@@ -472,6 +474,7 @@ export function TopBar() {
           placeholder={t("top.searchPlaceholder")}
           aria-label={t("top.searchAria")}
           spellCheck={false}
+          autoComplete="off"
         />
         {search.length > 0 && (
           <button

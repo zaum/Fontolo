@@ -162,6 +162,7 @@ function NewCollectionInput({ onDone }: { onDone: () => void }) {
         placeholder={t("side.collectionPlaceholder")}
         aria-label={t("side.newCollectionAria")}
         spellCheck={false}
+        autoComplete="off"
       />
     </motion.div>
   );
@@ -209,6 +210,7 @@ function RenameInput({
         onBlur={commit}
         aria-label={t("side.renameAria")}
         spellCheck={false}
+        autoComplete="off"
       />
     </div>
   );

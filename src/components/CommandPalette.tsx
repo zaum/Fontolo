@@ -301,6 +301,7 @@ export function CommandPalette() {
                 placeholder={t("palette.placeholder")}
                 aria-label={t("palette.searchAria")}
                 spellCheck={false}
+                autoComplete="off"
               />
               <span className="palette-hint">
                 {IS_MAC ? <Command size={11} strokeWidth={1.5} /> : "Ctrl"}K

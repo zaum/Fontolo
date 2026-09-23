@@ -79,6 +79,7 @@ export function BulkTagPrompt() {
                 placeholder={t("bulk.placeholder")}
                 aria-label={t("bulk.tagNameAria")}
                 spellCheck={false}
+                autoComplete="off"
               />
             </div>
             <motion.button
