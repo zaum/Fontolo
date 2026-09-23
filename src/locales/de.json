@@ -549,5 +549,5 @@
   "infobar.lampDefault": "Lampe: Linksklick = dauerhaft · Rechtsklick oder Umschalt+Linksklick = bis zum Beenden",
   "infobar.lampSwapped": "Lampe: Linksklick = bis zum Beenden · Rechtsklick oder Umschalt+Linksklick = dauerhaft",
   "infobar.capsLock": "Feststelltaste = immer bis zum Beenden",
-  "infobar.doubleClick": "Doppelklick auf eine Schrift = Details öffnen"
+  "infobar.doubleClick": "Doppelklick auf eine Schrift = Details ein/aus"
 }

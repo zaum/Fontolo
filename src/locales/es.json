@@ -560,5 +560,5 @@
   "infobar.lampDefault": "Lámpara: clic izquierdo = permanente · clic derecho o Mayús+clic izquierdo = hasta salir",
   "infobar.lampSwapped": "Lámpara: clic izquierdo = hasta salir · clic derecho o Mayús+clic izquierdo = permanente",
   "infobar.capsLock": "Bloq Mayús = siempre hasta salir",
-  "infobar.doubleClick": "Doble clic en una fuente = abrir detalles"
+  "infobar.doubleClick": "Doble clic en una fuente = mostrar/ocultar detalles"
 }

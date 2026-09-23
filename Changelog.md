@@ -1,13 +1,15 @@
 # Fontolo — Changelog
 
-* **Total commits:** 80
+* **Total commits:** 82
 * **Date range:** 2026-09-14 – 2026-09-23
 * **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, grid scroll stability, scan performance and Google Fonts rebuild
 
 ---
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Double-Click Opens the Detail Panel
-* Double-clicking a font card now opens the detail panel on the right for that family; plain single clicks keep their select-only behavior, and Ctrl/Shift clicks still extend the multi-selection without opening anything.
-* Compare-picking mode and the card's own buttons (lamp, star, expander, tag chips) are untouched — a double-click on them never opens the panel.
+* Double-clicking a font card now opens the detail panel on the right for that family, and a second double-click on the same family closes it again — the gesture is a toggle.
+* Plain single clicks keep their select-only behavior, and Ctrl/Shift clicks still extend the multi-selection without opening or closing anything.
+* Double-clicking a different family while the panel is open simply switches the panel to that family instead of closing it.
+* Compare-picking mode and the card's own buttons (lamp, star, expander, tag chips) are untouched — a double-click on them never toggles the panel.
 * The bottom hint strip spells the gesture out next to the lamp legend, in all nine shipped languages.
 
 `Direct Commit` · `1f70bf7`

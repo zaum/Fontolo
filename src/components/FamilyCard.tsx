@@ -193,15 +193,18 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         st.selectWith(family.name, mode, st.visibleOrder);
       }}
       onDoubleClick={(e) => {
-        // Double-click opens the detail panel for this family; the two
-        // single clicks that come with it have already selected it.
-        // Buttons handle themselves, and modifier-clicks keep their
-        // multi-select meaning instead of opening anything.
+        // Double-click toggles the detail panel: opening it for the
+        // family, or closing it when the panel already shows this one.
+        // The two single clicks that come with it have already selected
+        // the family. Buttons handle themselves, and modifier-clicks
+        // keep their multi-select meaning instead of toggling anything.
         if ((e.target as HTMLElement).closest("button")) return;
         if (e.ctrlKey || e.metaKey || e.shiftKey) return;
         const st = useFontStore.getState();
         if (st.comparePicking) return;
-        st.setDetailPanelOpen(true);
+        st.setDetailPanelOpen(
+          !(st.detailPanelOpen && st.selectedFamily === family.name),
+        );
       }}
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
