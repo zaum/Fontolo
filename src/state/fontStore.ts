@@ -358,6 +358,46 @@ function readSidebarSections(raw: unknown): SidebarSections {
   return out;
 }
 
+// The left filter sidebar keeps its selection as a UI preference: which browse
+// list is open, which collections / tags / foundries are filtered, and whether
+// the trash area was showing. Every value is read back defensively, so a prefs
+// blob from an older build can never leave the sidebar pointing at nothing.
+const BROWSE_KINDS: BrowseKind[] = [
+  "library",
+  "favorites",
+  "lastImported",
+  "activated",
+  "activatedSession",
+  "affinity",
+  "deactivated",
+  "system",
+  "googleFonts",
+];
+
+function readBrowseSel(raw: unknown): BrowseKind {
+  return typeof raw === "string" && (BROWSE_KINDS as string[]).includes(raw)
+    ? (raw as BrowseKind)
+    : "library";
+}
+
+function readArea(raw: unknown): AreaKind {
+  return raw === "trash" ? "trash" : "main";
+}
+
+// Names of restored filters: strings only, deduplicated and length-capped so a
+// hand-edited prefs file cannot turn into an unbounded sidebar selection.
+function readNameList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string" || entry.length === 0) continue;
+    if (out.includes(entry)) continue;
+    out.push(entry);
+    if (out.length >= 200) break;
+  }
+  return out;
+}
+
 function persistPrefs(get: () => FontStore) {
   clearTimeout(prefsTimer);
   prefsTimer = setTimeout(() => {
@@ -378,6 +418,12 @@ function persistPrefs(get: () => FontStore) {
       localePref: s.localePref,
       onboarded: s.onboarded,
       lastImported: s.lastImported,
+      // The left filter sidebar restores this selection on the next start.
+      area: s.area,
+      browseSel: s.browseSel,
+      colSel: s.colSel,
+      tagSel: s.tagSel,
+      foundrySel: s.foundrySel,
     });
   }, 600);
 }
@@ -418,6 +464,27 @@ function applyLibrary(
   const keptAffinity = get().affinityActivated.filter((n) => alive.has(n));
   if (keptAffinity.length !== get().affinityActivated.length)
     set({ affinityActivated: keptAffinity });
+  // A restored sidebar filter can point at a tag, collection or foundry that was
+  // deleted or renamed since the app was closed. Drop those here, where the
+  // fresh library is already in the store, so a restart never lands on a filter
+  // that could only ever show an empty grid. An empty font list keeps the
+  // foundry selection: it is derived from the library, the others are not.
+  const knownCols = new Set(Object.keys(get().collections));
+  const knownTags = new Set(allTags(get().tags).keys());
+  const keptCols = get().colSel.filter((n) => knownCols.has(n));
+  const keptTags = get().tagSel.filter((n) => knownTags.has(n));
+  const keptFoundries =
+    data.fonts.length === 0
+      ? get().foundrySel
+      : get().foundrySel.filter((n) => allFoundryCounts(data.fonts, get().tags).has(n));
+  if (
+    keptCols.length !== get().colSel.length ||
+    keptTags.length !== get().tagSel.length ||
+    keptFoundries.length !== get().foundrySel.length
+  ) {
+    set({ colSel: keptCols, tagSel: keptTags, foundrySel: keptFoundries });
+    persistPrefs(get);
+  }
 }
 
 export const useFontStore = create<FontStore>((set, get) => ({
@@ -543,6 +610,14 @@ export const useFontStore = create<FontStore>((set, get) => ({
               )
             : SIDEBAR_WIDTH_DEFAULT,
         sidebarSections: readSidebarSections(prefs.sidebarSections),
+        // The left filter sidebar comes back exactly as it was left. Filters
+        // whose tag, collection or foundry has since disappeared are pruned
+        // once the library is loaded, not here.
+        area: readArea(prefs.area),
+        browseSel: readBrowseSel(prefs.browseSel),
+        colSel: readNameList(prefs.colSel),
+        tagSel: readNameList(prefs.tagSel),
+        foundrySel: readNameList(prefs.foundrySel),
         // The Reduce motion control was removed; use its off-state as the
         // application default and ignore an older persisted reduced setting.
         motionPref: "system",
@@ -1770,60 +1845,35 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
   setNav: (nav) => {
     // Compatibility entry point (command palette, onboarding): an exclusive
-    // jump — clears the other blocks and returns to the main area.
+    // jump — clears the other blocks and returns to the main area. Persisted
+    // like a sidebar click, so the jump survives the next restart too.
+    const jump = (patch: Partial<FontStore>) => {
+      set({ ...patch, selectedFamily: null, selection: [] });
+      persistPrefs(get);
+    };
     if (nav.kind === "trash") {
-      set({ area: "trash", selectedFamily: null, selection: [] });
+      jump({ area: "trash" });
       return;
     }
     if (nav.kind === "tag") {
-      set({
-        area: "main",
-        browseSel: "library",
-        colSel: [],
-        tagSel: [nav.tag],
-        foundrySel: [],
-        selectedFamily: null,
-        selection: [],
-      });
+      jump({ area: "main", browseSel: "library", colSel: [], tagSel: [nav.tag], foundrySel: [] });
       return;
     }
     if (nav.kind === "collection") {
-      set({
-        area: "main",
-        browseSel: "library",
-        colSel: [nav.name],
-        tagSel: [],
-        foundrySel: [],
-        selectedFamily: null,
-        selection: [],
-      });
+      jump({ area: "main", browseSel: "library", colSel: [nav.name], tagSel: [], foundrySel: [] });
       return;
     }
     if (nav.kind === "foundry") {
-      set({
-        area: "main",
-        browseSel: "library",
-        colSel: [],
-        tagSel: [],
-        foundrySel: [nav.foundry],
-        selectedFamily: null,
-        selection: [],
-      });
+      jump({ area: "main", browseSel: "library", colSel: [], tagSel: [], foundrySel: [nav.foundry] });
       return;
     }
-    set({
-      area: "main",
-      browseSel: nav.kind,
-      colSel: [],
-      tagSel: [],
-      foundrySel: [],
-      selectedFamily: null,
-      selection: [],
-    });
+    jump({ area: "main", browseSel: nav.kind, colSel: [], tagSel: [], foundrySel: [] });
   },
-  setBrowse: (browseSel) =>
-    set({ area: "main", browseSel, foundrySel: [], selectedFamily: null, selection: [] }),
-  setFilterSel: (colSel, tagSel, foundrySel) =>
+  setBrowse: (browseSel) => {
+    set({ area: "main", browseSel, foundrySel: [], selectedFamily: null, selection: [] });
+    persistPrefs(get);
+  },
+  setFilterSel: (colSel, tagSel, foundrySel) => {
     set((s) => ({
       area: "main",
       colSel,
@@ -1831,8 +1881,13 @@ export const useFontStore = create<FontStore>((set, get) => ({
       foundrySel: foundrySel ?? s.foundrySel,
       selectedFamily: null,
       selection: [],
-    })),
-  setArea: (area) => set({ area, selectedFamily: null, selection: [] }),
+    }));
+    persistPrefs(get);
+  },
+  setArea: (area) => {
+    set({ area, selectedFamily: null, selection: [] });
+    persistPrefs(get);
+  },
   select: (selectedFamily) => {
     set({ selectedFamily, selection: selectedFamily ? [selectedFamily] : [] });
   },

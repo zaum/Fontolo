@@ -6,6 +6,16 @@
 
 ---
 
+### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Filter Sidebar Selection Survives a Restart
+* The left filter sidebar now comes back exactly as it was left: the open browse list, the collection, tag and foundry filters, and the trash area are all remembered between runs.
+* Restored selections are validated against the fresh library, so a tag, collection or foundry that was deleted or renamed in the meantime is dropped instead of opening the app on a filter that can only ever be empty.
+* Whichever way the selection changes — a sidebar click, a Shift/Ctrl multi-select or a command palette jump — it is written together with the other UI preferences, and the sidebar's expanded sections keep their state alongside it.
+
+`Direct Commit` · `pending`
+
+---
+
+
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Single Activation Lamp with Mouse Gestures
 * Replaced the two stacked lamps with one larger lamp per family, style row and waterfall header: left click activates permanently, right click or Shift+left click activates until quit, and Caps Lock always activates until quit.
 * Added a permanent hint strip at the very bottom of the window, under every panel, that spells out the lamp gestures for the current setting.
