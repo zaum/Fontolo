@@ -10,7 +10,7 @@
 * Activating a font re-publishes the library, which rebuilt the selection array with identical contents and re-fired the grid's scroll-to-selection effect — yanking the middle view back to the selected font while the user was reading a card further down.
 * The selection store now keeps the existing array whenever its contents did not actually change, and the grid's scroll effect only reacts when the focused family itself changes, so the scroll position stays put during activation, tag edits and background rescans.
 
-`Direct Commit` · `1f92ac2`
+`Direct Commit` · `0f816f1`
 
 ---
 
