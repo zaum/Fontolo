@@ -793,22 +793,6 @@
   color: var(--text-primary);
   background: rgba(124, 58, 237, 0.14);
 }
-.feat-reset {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-11);
-  color: var(--text-tertiary);
-  padding: 3px 8px;
-  border-radius: 5px;
-  transition: color var(--t-quick) ease, background var(--t-quick) ease;
-}
-.feat-reset:hover {
-  color: var(--text-primary);
-  background: var(--e2);
-}
-
 .filter-live {
   color: var(--text-primary);
 }
@@ -1134,7 +1118,6 @@
   border-top: 1px solid rgba(var(--ink-rgb), 0.03);
 }
 .face-toggle {
-  margin-left: auto;
   flex-shrink: 0;
   display: inline-flex;
 }
@@ -1150,6 +1133,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.15;
+  flex: 1;
+  min-width: 0;
 }
 .face-skeleton {
   display: inline-block;
@@ -1170,8 +1155,12 @@
   padding: 2px;
   justify-content: flex-start;
   flex-shrink: 0;
+  cursor: pointer;
   transition: background var(--t-quick) ease,
     border-color var(--t-quick) ease;
+}
+.pill-toggle:disabled {
+  cursor: not-allowed;
 }
 .pill-lg {
   --pill-w: 46px;
@@ -1194,6 +1183,77 @@
 @keyframes pill-pending {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.42; }
+}
+
+/* Activation lamp: one circle per card/row - grey when off, green when
+   fixed (permanent), yellow when session (until quit). Independent of the
+   accent color. No ring by default; a dashed ring in the lamp's own color
+   appears only when the family is active but partial. */
+.lamp {
+  --lamp-size: 22px;
+  --lamp-color: rgba(var(--ink-rgb), 0.3);
+  width: var(--lamp-size);
+  height: var(--lamp-size);
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1.5px solid transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color var(--t-quick) ease, opacity var(--t-quick) ease;
+}
+.lamp:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.lamp-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lamp-color);
+  transition: background var(--t-quick) ease;
+}
+.lamp-on {
+  --lamp-color: #34c759;
+}
+.lamp-session.lamp-on {
+  --lamp-color: #ffcc00;
+}
+.lamp-dashed {
+  border-style: dashed;
+  border-color: var(--lamp-color);
+}
+.lamp-pending .lamp-dot {
+  animation: lamp-pending 0.85s ease-in-out infinite;
+}
+@keyframes lamp-pending {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.42; }
+}
+
+/* Bottom hint strip: sits under every panel and always spells out what the
+   activation lamp does with each mouse button and with Caps Lock. */
+.infobar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: var(--fs-count);
+  letter-spacing: 0.02em;
+  color: rgba(var(--ink-rgb), 0.52);
+  border-top: 1px solid rgba(var(--ink-rgb), 0.07);
+  background: rgba(var(--ink-rgb), 0.025);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.infobar-sep {
+  opacity: 0.45;
 }
 
 .detail {
@@ -2350,11 +2410,11 @@
   50% { opacity: 0.45; }
 }
 
-.pill-toggle {
+.lamp {
   cursor: pointer;
 }
-.pill-toggle:disabled {
-  cursor: not-allowed;
+.lamp:disabled {
+  cursor: default;
 }
 .card-expand:hover .chevron {
   transform: translateX(1px);
@@ -2803,7 +2863,8 @@
   color: var(--text-tertiary);
 }
 .waterfall-toggle {
-  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
 }
 .waterfall-full-line {
   display: flex;

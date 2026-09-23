@@ -1,17 +1,18 @@
 
 
-:root {
-  color-scheme: light;
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-  --ink-rgb: 90, 90, 115;
+  --ink-rgb: 255, 255, 255;
 
-  --scrim-rgb: 150, 150, 180;
+  --scrim-rgb: 13, 13, 18;
 
-  --canvas: #ffffff;
-  --text-primary: #2e2e3a;
-  --text-secondary: rgba(46, 46, 58, 0.56);
-  --text-tertiary: rgba(46, 46, 58, 0.38);
-  --text-disabled: rgba(46, 46, 58, 0.24);
+  --canvas: #0d0d12;
+  --text-primary: #e8e8e8;
+  --text-secondary: rgba(232, 232, 232, 0.6);
+  --text-tertiary: rgba(232, 232, 232, 0.4);
+  --text-disabled: rgba(232, 232, 232, 0.25);
 
   --e0: rgba(255, 255, 255, 0);
   --e1: rgba(255, 255, 255, 0.04);
@@ -39,8 +40,13 @@
   --tooltip-bg: #1a1a22;
   --settings-panel-bg: #2a2a34;
   --settings-row-bg: rgba(255, 255, 255, 0.06);
-  --hero-grad: #ffffff;
-  --settings-glass-grad: #ffffff;
+  --hero-grad: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.55));
+  --settings-glass-grad: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.11),
+    rgba(255, 255, 255, 0.045) 45%,
+    rgba(255, 255, 255, 0.07)
+  );
 
   --fs-10: 10px;
   --fs-11: 11px;
@@ -101,8 +107,13 @@
   --tooltip-bg: #ffffff;
   --settings-panel-bg: #ffffff;
   --settings-row-bg: rgba(90, 90, 115, 0.045);
-  --hero-grad: #33333f;
-  --settings-glass-grad: #ffffff;
+  --hero-grad: linear-gradient(180deg, #33333f, rgba(51, 51, 63, 0.5));
+  --settings-glass-grad: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.78) 45%,
+    rgba(255, 255, 255, 0.88)
+  );
 }
 
 * {

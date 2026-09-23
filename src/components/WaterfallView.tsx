@@ -3,7 +3,10 @@ import { Rows3 } from "lucide-react";
 import { spring, staggerDelay } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
 import { useGoogleCss } from "../lib/googlePreview";
+import { ActivationLamp } from "../design/primitives/PillToggle";
 import {
+  familyPartial,
+  familySessionHeld,
   googlePreviewKey,
   isGoogleVirtualFace,
   resolveSampleText,
@@ -11,7 +14,6 @@ import {
   type Family,
 } from "../state/fontStore";
 import { useT } from "../lib/i18n";
-import { PillToggle } from "../design/primitives/PillToggle";
 
 const WATERFALL_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96];
 
@@ -22,6 +24,10 @@ export function WaterfallView({ families }: { families: Family[] }) {
   const sampleText = useFontStore((s) => s.sampleText);
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
+  const activateFamilySession = useFontStore((s) => s.activateFamilySession);
+  const deactivateFamilySession = useFontStore((s) => s.deactivateFamilySession);
+  const sessionPaths = useFontStore((s) => s.sessionActivatedPaths);
+  const swapLampButtons = useFontStore((s) => s.settings.swapActivationButtons);
   const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
 
   const focus =
@@ -68,27 +74,39 @@ export function WaterfallView({ families }: { families: Family[] }) {
   return (
     <div className="waterfall-view">
       <div className="waterfall-head">
-        <span className="waterfall-title">{family.name}</span>
-        <span className="waterfall-sub">{lead.style}</span>
         {showToggle && (
           <span className="waterfall-toggle">
-            <PillToggle
-              on={virtual ? installing || family.active : family.active}
-              disabled={virtual ? installing : !family.deactivatable || activationPending}
-              pending={activationPending}
-              onChange={(on) => {
+            <ActivationLamp
+              fixedOn={virtual ? false : family.active && !familySessionHeld(family.faces, sessionPaths)}
+              sessionOn={virtual ? false : family.active && familySessionHeld(family.faces, sessionPaths)}
+              dashed={familyPartial(family.faces) && family.active}
+              onFixed={() => {
                 if (virtual) {
-                  if (on) void installGoogleStyle(family.name, styleKey);
+                  void installGoogleStyle(family.name, styleKey);
                   return;
                 }
-                void setFamilyActive(family.name, on);
+                const sessionHeld = familySessionHeld(family.faces, sessionPaths);
+                void setFamilyActive(family.name, !family.active || sessionHeld);
               }}
-              label={t(virtual ? "card.googleActivateStyle" : family.active ? "card.deactivate" : "card.activate", {
+              onSession={() => {
+                if (virtual) return;
+                if (familySessionHeld(family.faces, sessionPaths)) {
+                  void deactivateFamilySession(family.name);
+                } else {
+                  void activateFamilySession(family.name);
+                }
+              }}
+              label={t(virtual ? "card.googleActivateStyle" : family.active ? "card.deactivateFixed" : "card.activateFixed", {
                 name: family.name,
               })}
+              disabled={virtual ? installing : !family.deactivatable || activationPending}
+              pending={activationPending}
+              swap={swapLampButtons}
             />
           </span>
         )}
+        <span className="waterfall-title">{family.name}</span>
+        <span className="waterfall-sub">{lead.style}</span>
       </div>
       {WATERFALL_SIZES.map((px, i) => (
         <motion.p

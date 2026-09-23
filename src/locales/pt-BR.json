@@ -549,5 +549,15 @@
   "toast.entriesMerged_many": "{count} entradas incorporadas",
   "toast.filesCopied_many": "{count} arquivos copiados para {dir}",
   "settings.affinityDocs_many": "{count} documentos abertos",
-  "toast.duplicatesSkipped_many": "{count} fontes já na sua biblioteca"
+  "toast.duplicatesSkipped_many": "{count} fontes já na sua biblioteca",
+  "card.activateFixed": "Ativar {name} permanentemente",
+  "card.deactivateFixed": "Desativar {name}",
+  "card.sessionFamily": "Alternar {name} até sair",
+  "card.sessionStyle": "Alternar o estilo de {name} até sair",
+  "settings.lampButtons": "Lâmpada de ativação",
+  "settings.lampSwap": "Inverter os botões do mouse",
+  "settings.lampSwapSub": "O clique esquerdo ativa permanentemente e o clique direito (ou Shift+clique esquerdo) ativa até sair. O Caps Lock ativa sempre até sair.",
+  "infobar.lampDefault": "Lâmpada: clique esquerdo = permanente · clique direito ou Shift+clique esquerdo = até sair",
+  "infobar.lampSwapped": "Lâmpada: clique esquerdo = até sair · clique direito ou Shift+clique esquerdo = permanente",
+  "infobar.capsLock": "Caps Lock = sempre até sair"
 }

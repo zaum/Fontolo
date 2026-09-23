@@ -137,6 +137,7 @@ export interface AppSettings {
   affinityDeactivateOnQuit: boolean;
   googleFontsEnabled: boolean;
   glyphSize: number;
+  swapActivationButtons: boolean;
 }
 
 export interface AffinityConnection {

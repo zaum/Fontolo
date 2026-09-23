@@ -235,10 +235,14 @@ export function Sidebar() {
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renamingTag, setRenamingTag] = useState<string | null>(null);
-  const [browseOpen, setBrowseOpen] = useState(true);
-  const [collectionsOpen, setCollectionsOpen] = useState(true);
-  const [tagsOpen, setTagsOpen] = useState(true);
-  const [foundryOpen, setFoundryOpen] = useState(true);
+  // Section open/closed states live in the store so they are persisted with
+  // the other prefs and the sidebar comes back as the user left it.
+  const sidebarSections = useFontStore((s) => s.sidebarSections);
+  const setSidebarSection = useFontStore((s) => s.setSidebarSection);
+  const browseOpen = sidebarSections.browse;
+  const collectionsOpen = sidebarSections.collections;
+  const tagsOpen = sidebarSections.tags;
+  const foundryOpen = sidebarSections.foundry;
 
   useEffect(() => {
     if (pendingCollectionFor) setCreating(true);
@@ -512,7 +516,7 @@ export function Sidebar() {
       <div className="sidebar-fixed">
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">
-          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setBrowseOpen((o) => !o)} aria-expanded={browseOpen} style={{ flex: 1 }}>
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setSidebarSection("browse", !browseOpen)} aria-expanded={browseOpen} style={{ flex: 1 }}>
             <span className="sidebar-heading-chevron">{browseOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
             <span>{t("side.browse")}</span>
           </button>
@@ -634,7 +638,7 @@ export function Sidebar() {
 
       <div className="sidebar-section">
         <div className="sidebar-heading sidebar-heading-row">
-          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setCollectionsOpen((o) => !o)} aria-expanded={collectionsOpen} style={{ flex: 1 }}>
+          <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setSidebarSection("collections", !collectionsOpen)} aria-expanded={collectionsOpen} style={{ flex: 1 }}>
             <span className="sidebar-heading-chevron">{collectionsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
             <span>{t("side.collections")}</span>
           </button>
@@ -740,7 +744,7 @@ export function Sidebar() {
       {tagCounts.size > 0 && (
         <div className="sidebar-section">
           <div className="sidebar-heading sidebar-heading-row">
-            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setTagsOpen((o) => !o)} aria-expanded={tagsOpen} style={{ flex: 1 }}>
+            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setSidebarSection("tags", !tagsOpen)} aria-expanded={tagsOpen} style={{ flex: 1 }}>
               <span className="sidebar-heading-chevron">{tagsOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
               <span>{t("side.tags")}</span>
             </button>
@@ -818,7 +822,7 @@ export function Sidebar() {
       {foundryCounts.size > 0 && (
         <div className="sidebar-section">
           <div className="sidebar-heading sidebar-heading-row">
-            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setFoundryOpen((o) => !o)} aria-expanded={foundryOpen} style={{ flex: 1 }}>
+            <button className="sidebar-heading sidebar-heading-collapsible" onClick={() => setSidebarSection("foundry", !foundryOpen)} aria-expanded={foundryOpen} style={{ flex: 1 }}>
               <span className="sidebar-heading-chevron">{foundryOpen ? <ChevronDown size={12} strokeWidth={2} /> : <ChevronRight size={12} strokeWidth={2} />}</span>
               <span>{t("side.foundry")}</span>
             </button>

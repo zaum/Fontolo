@@ -1,13 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronRight, Star, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
-import { PillToggle } from "../design/primitives/PillToggle";
+import { ActivationLamp } from "../design/primitives/PillToggle";
 import { spring, springBouncy, springSnappy, springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
 import { useGoogleCss } from "../lib/googlePreview";
 import { buildFamilyMenu, buildTagMenu } from "../lib/menus";
 import { openContextMenu, openContextMenuAt } from "../design/primitives/ContextMenu";
-import { activeConflictsFor, conflictsFor, googlePreviewKey, isGoogleVirtualFace, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
+import { activeConflictsFor, conflictsFor, familyPartial, familySessionHeld, fontSessionHeld, googlePreviewKey, isGoogleVirtualFace, SIZES, resolveSampleText, useFontStore, type Family } from "../state/fontStore";
 import { playStar, playTag } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
@@ -38,6 +38,10 @@ function FacePreview({
   const fontFamily = virtual ? google.fontFamily : local.fontFamily;
   const failed = virtual ? google.failed : local.failed;
   const setFontFileActive = useFontStore((s) => s.setFontFileActive);
+  const activateFontSession = useFontStore((s) => s.activateFontSession);
+  const deactivateFontSession = useFontStore((s) => s.deactivateFontSession);
+  const sessionActivatedPaths = useFontStore((s) => s.sessionActivatedPaths);
+  const swapLampButtons = useFontStore((s) => s.settings.swapActivationButtons);
   const activationPending = useFontStore((s) => s.activationPending.includes(face.path));
   const installGoogleStyle = useFontStore((s) => s.installGoogleStyle);
   const styleKey = face.id.split(":").pop() ?? "400";
@@ -45,6 +49,35 @@ function FacePreview({
   const installing = useFontStore((s) => Boolean(s.googleInstalling[googlePreviewKey(family, styleKey)]));
   return (
     <div className="face-row">
+      <span className="face-toggle">
+        <ActivationLamp
+          fixedOn={virtual ? false : face.active && !fontSessionHeld(face.path, sessionActivatedPaths)}
+          sessionOn={virtual ? false : face.active && fontSessionHeld(face.path, sessionActivatedPaths)}
+          label={t(virtual ? "card.googleActivateStyle" : face.active ? "card.deactivateFixed" : "card.activateFixed", {
+            name: face.style,
+          })}
+          disabled={virtual ? installing : !face.deactivatable || activationPending}
+          pending={activationPending}
+          swap={swapLampButtons}
+          onFixed={() => {
+            // A catalogue style has no file yet: switching it on downloads the
+            // desktop font and activates it in one step.
+            if (virtual) {
+              void installGoogleStyle(family, styleKey);
+              return;
+            }
+            void setFontFileActive(face.path, !face.active || fontSessionHeld(face.path, sessionActivatedPaths));
+          }}
+          onSession={() => {
+            if (virtual) return;
+            if (fontSessionHeld(face.path, sessionActivatedPaths)) {
+              void deactivateFontSession(face.path);
+            } else {
+              void activateFontSession(face.path);
+            }
+          }}
+        />
+      </span>
       <span className="face-style">{face.style}</span>
       {fontFamily ? (
         <span
@@ -66,25 +99,6 @@ function FacePreview({
       ) : (
         <span className="skeleton face-skeleton" />
       )}
-      <span className="face-toggle">
-        <PillToggle
-          on={virtual ? installing || face.active : face.active}
-          disabled={virtual ? installing : !face.deactivatable || activationPending}
-          pending={activationPending}
-          onChange={(on) => {
-            // A catalogue style has no file yet: switching it on downloads the
-            // desktop font and activates it in one step.
-            if (virtual) {
-              if (on) void installGoogleStyle(family, styleKey);
-              return;
-            }
-            void setFontFileActive(face.path, on);
-          }}
-          label={t(virtual ? "card.googleActivateStyle" : face.active ? "card.deactivate" : "card.activate", {
-            name: face.style,
-          })}
-        />
-      </span>
     </div>
   );
 }
@@ -95,6 +109,10 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
   const setFamilyActive = useFontStore((s) => s.setFamilyActive);
+  const activateFamilySession = useFontStore((s) => s.activateFamilySession);
+  const deactivateFamilySession = useFontStore((s) => s.deactivateFamilySession);
+  const sessionPaths = useFontStore((s) => s.sessionActivatedPaths);
+  const swapLampButtons = useFontStore((s) => s.settings.swapActivationButtons);
   const activationPending = useFontStore((s) =>
     family.faces.some((face) => s.activationPending.includes(face.path)),
   );
@@ -177,9 +195,32 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
       onContextMenu={(e) => openContextMenu(e, buildFamilyMenu(family))}
     >
       <header className="card-head">
+        {/* The activation lamp sits FIRST: after the selection strip, before
+            the preview column — green fixed, yellow session (until quit). */}
+        {!catalogue && family.deactivatable && (
+          <ActivationLamp
+            fixedOn={family.active && !familySessionHeld(family.faces, sessionPaths)}
+            sessionOn={family.active && familySessionHeld(family.faces, sessionPaths)}
+            dashed={familyPartial(family.faces) && family.active}
+            label={t(family.active ? "card.deactivateFixed" : "card.activateFixed", { name: family.name })}
+            disabled={activationPending}
+            pending={activationPending}
+            swap={swapLampButtons}
+            onFixed={() => {
+              const sessionHeld = familySessionHeld(family.faces, sessionPaths);
+              void setFamilyActive(family.name, !family.active || sessionHeld);
+            }}
+            onSession={() => {
+              if (familySessionHeld(family.faces, sessionPaths)) {
+                void deactivateFamilySession(family.name);
+              } else {
+                void activateFamilySession(family.name);
+              }
+            }}
+          />
+        )}
         <motion.button
           className={`star-btn ${favorite ? "star-on" : ""}`}
-          aria-label={t(favorite ? "card.unfavorite" : "card.favorite", { name: family.name })}
           aria-pressed={favorite}
           onClick={(e) => {
             e.stopPropagation();
@@ -299,17 +340,9 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
             </span>
           )
         )}
-        {/* A catalogue family has no family-wide switch: each style is
-            installed on its own, from the style list. */}
-        {!catalogue && (
-          <PillToggle
-            on={family.active}
-            disabled={!family.deactivatable || activationPending}
-            pending={activationPending}
-            onChange={(on) => void setFamilyActive(family.name, on)}
-            label={t(family.active ? "card.deactivate" : "card.activate", { name: family.name })}
-          />
-        )}
+        {/* The family lamps moved to the front of the header; nothing wide
+            lives here anymore. */}
+        {!catalogue && null}
       </header>
 
       <div className="card-preview" style={{ minHeight: size * 1.35 }}>

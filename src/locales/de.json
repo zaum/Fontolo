@@ -538,5 +538,15 @@
   "toast.googleCacheFailed": "Vorschau-Cache konnte nicht geleert werden",
   "settings.googleFontsLocation": "Installierte Google-Schriften",
   "settings.googleFontsLocationSub": "Aktivierte Schnitte landen hier und werden für andere Apps sichtbar.",
-  "settings.googleFontsLocationEmpty": "Noch kein Ordner"
+  "settings.googleFontsLocationEmpty": "Noch kein Ordner",
+  "card.activateFixed": "„{name}“ dauerhaft aktivieren",
+  "card.deactivateFixed": "„{name}“ deaktivieren",
+  "card.sessionFamily": "„{name}“ bis zum Beenden umschalten",
+  "card.sessionStyle": "Schriftstil „{name}“ bis zum Beenden umschalten",
+  "settings.lampButtons": "Aktivierungslampe",
+  "settings.lampSwap": "Maustasten der Lampe tauschen",
+  "settings.lampSwapSub": "Linksklick aktiviert dauerhaft, Rechtsklick (oder Umschalt+Linksklick) aktiviert bis zum Beenden. Die Feststelltaste aktiviert immer bis zum Beenden.",
+  "infobar.lampDefault": "Lampe: Linksklick = dauerhaft · Rechtsklick oder Umschalt+Linksklick = bis zum Beenden",
+  "infobar.lampSwapped": "Lampe: Linksklick = bis zum Beenden · Rechtsklick oder Umschalt+Linksklick = dauerhaft",
+  "infobar.capsLock": "Feststelltaste = immer bis zum Beenden"
 }

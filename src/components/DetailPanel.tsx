@@ -145,15 +145,11 @@ function FeatureChips({
   features,
   overrides,
   onToggle,
-  onReset,
 }: {
   features: string[];
   overrides: Record<string, boolean>;
   onToggle: (tag: string) => void;
-  onReset: () => void;
 }) {
-  const t = useT();
-  const dirty = Object.keys(overrides).length > 0;
   return (
     <div className="feat-wrap">
       <div className="feat-chips">
@@ -173,11 +169,6 @@ function FeatureChips({
           );
         })}
       </div>
-      {dirty && (
-        <button className="feat-reset" onClick={onReset}>
-          <RotateCcw size={11} strokeWidth={1.5} /> {t("detail.reset")}
-        </button>
-      )}
     </div>
   );
 }
@@ -789,7 +780,6 @@ export function DetailPanel() {
                       return copy;
                     });
                   }}
-                  onReset={() => setFeatureOverrides({})}
                 />
               </motion.section>
             )}

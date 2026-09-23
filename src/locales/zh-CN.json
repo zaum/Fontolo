@@ -535,5 +535,15 @@
   "toast.googleCacheFailed": "无法清空预览缓存",
   "settings.googleFontsLocation": "已安装的 Google 字体",
   "settings.googleFontsLocationSub": "启用的样式会保存在这里，并对其他应用可见。",
-  "settings.googleFontsLocationEmpty": "暂无文件夹"
+  "settings.googleFontsLocationEmpty": "暂无文件夹",
+  "card.activateFixed": "永久激活 {name}",
+  "card.deactivateFixed": "停用 {name}",
+  "card.sessionFamily": "切换 {name}（退出前有效）",
+  "card.sessionStyle": "切换 {name} 样式（退出前有效）",
+  "settings.lampButtons": "激活指示灯",
+  "settings.lampSwap": "交换指示灯的鼠标按键",
+  "settings.lampSwapSub": "左键永久激活，右键（或 Shift+左键）激活至退出。大写锁定始终激活至退出。",
+  "infobar.lampDefault": "指示灯：左键 = 永久 · 右键或 Shift+左键 = 至退出",
+  "infobar.lampSwapped": "指示灯：左键 = 至退出 · 右键或 Shift+左键 = 永久",
+  "infobar.capsLock": "大写锁定 = 始终至退出"
 }

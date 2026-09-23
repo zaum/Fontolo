@@ -527,5 +527,15 @@
   "toast.googleCacheFailed": "無法清除預覽快取",
   "settings.googleFontsLocation": "已安裝的 Google 字型",
   "settings.googleFontsLocationSub": "啟用的樣式會儲存在這裡，並對其他應用程式可見。",
-  "settings.googleFontsLocationEmpty": "尚無資料夾"
+  "settings.googleFontsLocationEmpty": "尚無資料夾",
+  "card.activateFixed": "永久啟用 {name}",
+  "card.deactivateFixed": "停用 {name}",
+  "card.sessionFamily": "切換 {name}（結束前有效）",
+  "card.sessionStyle": "切換 {name} 樣式（結束前有效）",
+  "settings.lampButtons": "啟用指示燈",
+  "settings.lampSwap": "交換指示燈的滑鼠按鍵",
+  "settings.lampSwapSub": "左鍵永久啟用，右鍵（或 Shift+左鍵）啟用至結束。大寫鎖定一律啟用至結束。",
+  "infobar.lampDefault": "指示燈：左鍵 = 永久 · 右鍵或 Shift+左鍵 = 至結束",
+  "infobar.lampSwapped": "指示燈：左鍵 = 至結束 · 右鍵或 Shift+左鍵 = 永久",
+  "infobar.capsLock": "大寫鎖定 = 一律至結束"
 }

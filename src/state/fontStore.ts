@@ -80,6 +80,12 @@ const scanQueue = new ScanQueue(async (isCurrent) => {
 export type ViewMode = "grid" | "waterfall";
 export type MotionPref = "system" | "reduced";
 export type SortMode = "name" | "styles" | "size";
+
+// Collapsible sections of the left filter sidebar. Their open/closed state is
+// a UI preference, so it is persisted with the other prefs and survives a
+// restart instead of resetting to "all expanded".
+export type SidebarSectionKey = "browse" | "collections" | "tags" | "foundry";
+export type SidebarSections = Record<SidebarSectionKey, boolean>;
 export type Nav =
   | { kind: "library" }
   | { kind: "trash" }
@@ -173,6 +179,7 @@ interface FontStore {
   collections: Record<string, string[]>;
   favorites: string[];
   sessionActivated: string[];
+  sessionActivatedPaths: string[];
   affinityActivated: string[];
   activationPending: string[];
   lastImported: string[];
@@ -181,6 +188,8 @@ interface FontStore {
   panelWidth: number;
   detailPanelOpen: boolean;
   sidebarWidth: number;
+  /** Which filter-sidebar sections are expanded (persisted across restarts). */
+  sidebarSections: SidebarSections;
 
   selection: string[];
 
@@ -237,6 +246,7 @@ interface FontStore {
   rescan: () => Promise<void>;
   setFamilyActive: (family: string, active: boolean) => Promise<void>;
   activateFamilySession: (family: string) => Promise<void>;
+  activateFontSession: (path: string) => Promise<void>;
   setFontFileActive: (path: string, active: boolean) => Promise<void>;
   uninstallFontFile: (path: string) => Promise<void>;
   installPaths: (paths: string[], mode: InstallMode) => Promise<void>;
@@ -254,10 +264,13 @@ interface FontStore {
   favoriteMany: (families: string[]) => Promise<void>;
   setFamilyNote: (family: string, note: string) => Promise<void>;
   setFamiliesActiveBulk: (families: string[], active: boolean) => Promise<void>;
+  deactivateFamilySession: (family: string) => Promise<void>;
+  deactivateFontSession: (path: string) => Promise<void>;
   applyFamilyInApp: (family: string, app: AdobeApp) => Promise<void>;
   setPanelWidth: (w: number) => void;
   setDetailPanelOpen: (open: boolean) => void;
   setSidebarWidth: (w: number) => void;
+  setSidebarSection: (key: SidebarSectionKey, open: boolean) => void;
   selectWith: (family: string, mode: "single" | "toggle" | "range", order: string[]) => void;
   selectAllVisible: () => void;
   openCompare: (families: string[]) => void;
@@ -320,6 +333,31 @@ function applyMotionPref(pref: MotionPref) {
 }
 
 let prefsTimer: ReturnType<typeof setTimeout> | undefined;
+
+const SIDEBAR_SECTION_KEYS: SidebarSectionKey[] = [
+  "browse",
+  "collections",
+  "tags",
+  "foundry",
+];
+
+function defaultSidebarSections(): SidebarSections {
+  return { browse: true, collections: true, tags: true, foundry: true };
+}
+
+// Reads the persisted sidebar section states defensively: anything missing or
+// malformed falls back to the default (expanded), so an older or corrupted
+// prefs blob can never render a broken sidebar.
+function readSidebarSections(raw: unknown): SidebarSections {
+  const out = defaultSidebarSections();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const rec = raw as Record<string, unknown>;
+  for (const key of SIDEBAR_SECTION_KEYS) {
+    if (typeof rec[key] === "boolean") out[key] = rec[key];
+  }
+  return out;
+}
+
 function persistPrefs(get: () => FontStore) {
   clearTimeout(prefsTimer);
   prefsTimer = setTimeout(() => {
@@ -333,6 +371,7 @@ function persistPrefs(get: () => FontStore) {
       sort: s.sort,
       panelWidth: s.panelWidth,
       sidebarWidth: s.sidebarWidth,
+      sidebarSections: s.sidebarSections,
       motionPref: s.motionPref,
       soundPref: s.soundPref,
       themePref: s.themePref,
@@ -367,7 +406,12 @@ function applyLibrary(
   const names = new Set(data.fonts.map((f) => f.family));
   const keptImported = get().lastImported.filter((n) => names.has(n));
   if (keptImported.length !== get().lastImported.length) set({ lastImported: keptImported });
-  // Drop session entries that no longer exist or are no longer active.
+  // Drop stale session paths and re-derive the family list from the paths that
+  // are still around and active, then drop session entries that no longer
+  // exist or are no longer active.
+  const alivePaths = new Set(data.fonts.filter((f) => f.active).map((f) => f.path));
+  const keptPaths = get().sessionActivatedPaths.filter((p) => alivePaths.has(p));
+  if (keptPaths.length !== get().sessionActivatedPaths.length) set({ sessionActivatedPaths: keptPaths });
   const alive = new Set(data.fonts.filter((f) => f.active).map((f) => f.family));
   const kept = get().sessionActivated.filter((n) => alive.has(n));
   if (kept.length !== get().sessionActivated.length) set({ sessionActivated: kept });
@@ -391,6 +435,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   collections: {},
   favorites: [],
   sessionActivated: [],
+  sessionActivatedPaths: [],
   affinityActivated: [],
   activationPending: [],
   lastImported: [],
@@ -399,6 +444,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   panelWidth: 348,
   detailPanelOpen: false,
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
+  sidebarSections: defaultSidebarSections(),
   selection: [],
   visibleOrder: [],
   compare: null,
@@ -406,7 +452,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
   settingsOpen: false,
   settingsCategory: "language",
   paletteOpen: false,
-  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true, glyphSize: 16 },
+  settings: { extraDirs: [], watchEnabled: false, autoActivateImports: false, libraryDir: null, libraryDirEnabled: false, affinityEnabled: false, affinityDeactivateOnQuit: true, googleFontsEnabled: true, glyphSize: 16, swapActivationButtons: false },
   affinityConnection: null,
   adobeAvailable: false,
   motionPref: "system",
@@ -496,6 +542,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
                 Math.max(SIDEBAR_WIDTH_MIN, prefs.sidebarWidth),
               )
             : SIDEBAR_WIDTH_DEFAULT,
+        sidebarSections: readSidebarSections(prefs.sidebarSections),
         // The Reduce motion control was removed; use its off-state as the
         // application default and ignore an older persisted reduced setting.
         motionPref: "system",
@@ -777,6 +824,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
     if (paths.length === 0) return;
 
     const prevSession = get().sessionActivated;
+    const prevPaths = get().sessionActivatedPaths;
     const prevAffinity = get().affinityActivated;
     const prevFonts = get().fonts;
     set({
@@ -784,6 +832,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
         f.family === family && f.deactivatable ? { ...f, active } : f,
       ),
       sessionActivated: prevSession.filter((n) => n !== family),
+      sessionActivatedPaths: prevPaths.filter((p) => !paths.includes(p)),
       affinityActivated: prevAffinity.filter((n) => n !== family),
       activationPending: [...new Set([...get().activationPending, ...paths])],
     });
@@ -793,6 +842,7 @@ export const useFontStore = create<FontStore>((set, get) => ({
       set({
         fonts: prevFonts,
         sessionActivated: prevSession,
+        sessionActivatedPaths: prevPaths,
         affinityActivated: prevAffinity,
       });
       toast.error(t(active ? "toast.couldntActivate" : "toast.couldntDeactivate"), String(e));
@@ -806,14 +856,20 @@ export const useFontStore = create<FontStore>((set, get) => ({
     const paths = [...new Set(faces.map((f) => f.path))];
     if (paths.length === 0) return;
     const prevFonts = get().fonts;
+    const prevPaths = get().sessionActivatedPaths;
     set({
       fonts: prevFonts.map((f) =>
         f.family === family && f.deactivatable ? { ...f, active: true } : f,
       ),
+      sessionActivatedPaths: [...new Set([...prevPaths, ...paths])],
+      activationPending: [...new Set([...get().activationPending, ...paths])],
     });
     try {
       await ipc.setFontsActiveSession(paths);
-      set({ sessionActivated: [...new Set([...get().sessionActivated, family])] });
+      set({
+        sessionActivated: [...new Set([...get().sessionActivated, family])],
+        activationPending: get().activationPending.filter((pending) => !paths.includes(pending)),
+      });
       toast.success(
         t("toast.activeUntilClose", { family }),
         t("toast.activeUntilCloseSub"),
@@ -822,8 +878,107 @@ export const useFontStore = create<FontStore>((set, get) => ({
     } catch (e) {
       set({
         fonts: prevFonts,
+        sessionActivatedPaths: prevPaths,
+        activationPending: get().activationPending.filter((pending) => !paths.includes(pending)),
       });
       toast.error(t("toast.couldntActivate"), String(e));
+    }
+  },
+
+  // Switches a session-activated family back off: every one of its files is
+  // deactivated and the session mark is dropped, so the fonts go away now —
+  // and they would not come back on the next start either.
+  deactivateFamilySession: async (family) => {
+    const faces = get().fonts.filter((f) => f.family === family && f.deactivatable);
+    const paths = [...new Set(faces.map((f) => f.path))];
+    if (paths.length === 0) return;
+    const prevFonts = get().fonts;
+    const prevSession = get().sessionActivated;
+    const prevPaths = get().sessionActivatedPaths;
+    set({
+      fonts: prevFonts.map((f) =>
+        f.family === family && f.deactivatable ? { ...f, active: false } : f,
+      ),
+      sessionActivated: prevSession.filter((n) => n !== family),
+      sessionActivatedPaths: prevPaths.filter((p) => !paths.includes(p)),
+      activationPending: [...new Set([...get().activationPending, ...paths])],
+    });
+    try {
+      await ipc.setFontsActive(paths, false);
+      set({ activationPending: get().activationPending.filter((pending) => !paths.includes(pending)) });
+    } catch (e) {
+      set({
+        fonts: prevFonts,
+        sessionActivated: prevSession,
+        sessionActivatedPaths: prevPaths,
+        activationPending: get().activationPending.filter((pending) => !paths.includes(pending)),
+      });
+      toast.error(t("toast.couldntDeactivate"), String(e));
+    }
+  },
+
+  // Same as above for a single style row (one file): the session lamp flips
+  // independently of the fixed lamp.
+  deactivateFontSession: async (path) => {
+    const faces = get().fonts.filter((f) => f.path === path);
+    if (faces.length === 0) return;
+    const targets = faces.filter((f) => f.deactivatable);
+    if (targets.length === 0) return;
+    const family = faces[0].family;
+    const prevFonts = get().fonts;
+    const prevSession = get().sessionActivated;
+    const prevPaths = get().sessionActivatedPaths;
+    set({
+      fonts: prevFonts.map((f) =>
+        f.path === path && f.deactivatable ? { ...f, active: false } : f,
+      ),
+      sessionActivatedPaths: prevPaths.filter((p) => p !== path),
+      activationPending: [...new Set([...get().activationPending, path])],
+    });
+    try {
+      await ipc.setFontsActive([path], false);
+      // The whole family counted as session-activated only while every one of
+      // its files carried the mark; dropping one file clears the family flag.
+      const remaining = get().fonts.filter((f) => f.family === family && f.deactivatable);
+      const stillSession = remaining.length > 0 && remaining.every((f) => get().sessionActivatedPaths.includes(f.path));
+      set({
+        sessionActivated: stillSession ? prevSession : prevSession.filter((n) => n !== family),
+        activationPending: get().activationPending.filter((pending) => pending !== path),
+      });
+    } catch (e) {
+      set({
+        fonts: prevFonts,
+        sessionActivated: prevSession,
+        sessionActivatedPaths: prevPaths,
+        activationPending: get().activationPending.filter((pending) => pending !== path),
+      });
+      toast.error(t("toast.couldntDeactivate"), String(e));
+    }
+  },
+
+  // Session-activates a single style row (one file): the file comes on until
+  // quit and its path is marked, so the lamp reads yellow.
+  activateFontSession: async (path) => {
+    const faces = get().fonts.filter((f) => f.path === path);
+    if (faces.length === 0) return;
+    const targets = faces.filter((f) => f.deactivatable);
+    if (targets.length === 0) return;
+    const prevFonts = get().fonts;
+    const prevPaths = get().sessionActivatedPaths;
+    set({
+      fonts: prevFonts.map((f) =>
+        f.path === path && f.deactivatable ? { ...f, active: true } : f,
+      ),
+      sessionActivatedPaths: [...new Set([...prevPaths, path])],
+      activationPending: [...new Set([...get().activationPending, path])],
+    });
+    try {
+      await ipc.setFontsActiveSession([path]);
+    } catch (e) {
+      set({ fonts: prevFonts, sessionActivatedPaths: prevPaths });
+      toast.error(t("toast.couldntActivate"), String(e));
+    } finally {
+      set({ activationPending: get().activationPending.filter((pending) => pending !== path) });
     }
   },
 
@@ -1482,6 +1637,11 @@ export const useFontStore = create<FontStore>((set, get) => ({
   },
   setDetailPanelOpen: (detailPanelOpen) => set({ detailPanelOpen }),
 
+  setSidebarSection: (key, open) => {
+    set({ sidebarSections: { ...get().sidebarSections, [key]: open } });
+    persistPrefs(get);
+  },
+
   setSidebarWidth: (sidebarWidth) => {
     set({
       sidebarWidth: Math.min(
@@ -1898,6 +2058,7 @@ export function selectVisibleFamilies(s: {
   collections: Record<string, string[]>;
   favorites: string[];
   sessionActivated: string[];
+  sessionActivatedPaths: string[];
   affinityActivated: string[];
   lastImported: string[];
   notes: Record<string, string>;
@@ -2003,6 +2164,28 @@ export function selectVisibleFamilies(s: {
       out.sort((a, b) => a.name.localeCompare(b.name));
   }
   return out;
+}
+
+/** Partial family: at least one deactivatable font is on, but not all of them.
+ * The card then adds a dashed ring around whichever lamp drove the active state
+ * (fixed or session), so the user sees "on, but not everything". */
+export function familyPartial(faces: FontFace[]): boolean {
+  const targets = faces.filter((f) => f.deactivatable);
+  if (targets.length === 0) return false;
+  const on = targets.filter((f) => f.active).length;
+  return on > 0 && on < targets.length;
+}
+
+/** Per-file session marks: every file held on only until the app quits. A
+ * family counts as session-activated while at least one of its files carries
+ * the mark (the whole family usually flips as a unit). */
+export function familySessionHeld(faces: FontFace[], sessionPaths: string[]): boolean {
+  return faces.some((f) => f.deactivatable && sessionPaths.includes(f.path));
+}
+
+/** A single style row is session-held exactly when its file carries the mark. */
+export function fontSessionHeld(path: string, sessionPaths: string[]): boolean {
+  return sessionPaths.includes(path);
 }
 
 export function allTags(tags: Record<string, string[]>): Map<string, number> {

@@ -56,6 +56,10 @@ pub struct AppState {
     #[serde(default = "default_glyph_size")]
     pub glyph_size: u8,
 
+    /// Swap the activation lamp buttons: left click = session, right = fixed.
+    #[serde(default)]
+    pub swap_activation_buttons: bool,
+
     /// Google fonts downloaded from the catalogue and installed into the library
     /// folder. Keeping the list here is what lets an installed Google font stay
     /// recognisable as a Google font: the file itself sits in the normal font

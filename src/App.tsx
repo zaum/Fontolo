@@ -51,6 +51,23 @@ function ScanSkeleton() {
   );
 }
 
+// Always-visible hint strip at the very bottom of the window, under every
+// panel: spells out what the activation lamp does with each mouse button. The
+// wording follows the swap setting so the bar never lies.
+function InfoBar() {
+  const t = useT();
+  const swap = useFontStore((s) => s.settings.swapActivationButtons);
+  return (
+    <footer className="infobar" role="note">
+      <span className="infobar-item">{t(swap ? "infobar.lampSwapped" : "infobar.lampDefault")}</span>
+      <span className="infobar-sep" aria-hidden="true">
+        ·
+      </span>
+      <span className="infobar-item">{t("infobar.capsLock")}</span>
+    </footer>
+  );
+}
+
 function EmptyLibrary({
   searching,
   browse,
@@ -134,6 +151,7 @@ function MainContent() {
   const collections = useFontStore((s) => s.collections);
   const favorites = useFontStore((s) => s.favorites);
   const sessionActivated = useFontStore((s) => s.sessionActivated);
+  const sessionActivatedPaths = useFontStore((s) => s.sessionActivatedPaths);
   const affinityActivated = useFontStore((s) => s.affinityActivated);
   const lastImported = useFontStore((s) => s.lastImported);
   const notes = useFontStore((s) => s.notes);
@@ -149,11 +167,11 @@ function MainContent() {
   const families = useMemo(
     () =>
       selectVisibleFamilies({
-        fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search,
+        fonts, tags, collections, favorites, sessionActivated, sessionActivatedPaths, affinityActivated, lastImported, notes, search,
         classFilter, scriptFilter, variableOnly, browse, selCols: colSel, selTags: tagSel, selFoundrys: foundrySel, sort,
         googleCatalog, googleMeta,
       }),
-    [fonts, tags, collections, favorites, sessionActivated, affinityActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort, googleCatalog, googleMeta],
+    [fonts, tags, collections, favorites, sessionActivated, sessionActivatedPaths, affinityActivated, lastImported, notes, search, classFilter, scriptFilter, variableOnly, browse, colSel, tagSel, foundrySel, sort, googleCatalog, googleMeta],
   );
 
   const visibleOrder = useMemo(() => families.map((f) => f.name), [families]);
@@ -345,6 +363,8 @@ export default function App() {
             </div>
           </div>
         </div>
+        <InfoBar />
+
       </div>
       <DropZone />
       <CompareOverlay />

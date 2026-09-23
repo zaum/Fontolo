@@ -560,5 +560,15 @@
   "settings.affinityDocs_few": "{count} открытых документа",
   "settings.affinityDocs_many": "{count} открытых документов",
   "toast.duplicatesSkipped_few": "{count} шрифта уже в вашей библиотеке",
-  "toast.duplicatesSkipped_many": "{count} шрифтов уже в вашей библиотеке"
+  "toast.duplicatesSkipped_many": "{count} шрифтов уже в вашей библиотеке",
+  "card.activateFixed": "Активировать {name} постоянно",
+  "card.deactivateFixed": "Деактивировать {name}",
+  "card.sessionFamily": "Переключить {name} до выхода",
+  "card.sessionStyle": "Переключить стиль {name} до выхода",
+  "settings.lampButtons": "Лампа активации",
+  "settings.lampSwap": "Поменять кнопки мыши для лампы",
+  "settings.lampSwapSub": "Левый клик включает шрифт навсегда, правый клик (или Shift+левый клик) — до выхода. Caps Lock всегда включает до выхода.",
+  "infobar.lampDefault": "Лампа: левый клик = навсегда · правый клик или Shift+левый клик = до выхода",
+  "infobar.lampSwapped": "Лампа: левый клик = до выхода · правый клик или Shift+левый клик = навсегда",
+  "infobar.capsLock": "Caps Lock = всегда до выхода"
 }

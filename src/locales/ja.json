@@ -527,5 +527,15 @@
   "toast.googleCacheFailed": "プレビューキャッシュを削除できませんでした",
   "settings.googleFontsLocation": "インストール済みGoogleフォント",
   "settings.googleFontsLocationSub": "有効化したスタイルはここに保存され、他のアプリから見えるようになります。",
-  "settings.googleFontsLocationEmpty": "フォルダはまだありません"
+  "settings.googleFontsLocationEmpty": "フォルダはまだありません",
+  "card.activateFixed": "{name} を常時アクティブ化",
+  "card.deactivateFixed": "{name} を非アクティブ化",
+  "card.sessionFamily": "{name} を終了まで切り替え",
+  "card.sessionStyle": "{name} のスタイルを終了まで切り替え",
+  "settings.lampButtons": "有効化ランプ",
+  "settings.lampSwap": "ランプのマウスボタンを入れ替える",
+  "settings.lampSwapSub": "左クリックで常時有効、右クリック（または Shift+左クリック）で終了まで有効になります。Caps Lock では常に終了まで有効です。",
+  "infobar.lampDefault": "ランプ：左クリック = 常時 · 右クリックまたは Shift+左クリック = 終了まで",
+  "infobar.lampSwapped": "ランプ：左クリック = 終了まで · 右クリックまたは Shift+左クリック = 常時",
+  "infobar.capsLock": "Caps Lock = 常に終了まで"
 }

@@ -782,6 +782,8 @@ struct Settings {
     google_fonts_enabled: bool,
     #[serde(default = "default_glyph_size")]
     glyph_size: u8,
+    #[serde(default)]
+    swap_activation_buttons: bool,
 }
 
 fn default_google_fonts_enabled() -> bool {
@@ -805,6 +807,7 @@ fn get_settings(store: State<Store>) -> Result<Settings, String> {
         affinity_deactivate_on_quit: state.affinity_deactivate_on_quit,
         google_fonts_enabled: state.google_fonts_enabled,
         glyph_size: state.glyph_size,
+        swap_activation_buttons: state.swap_activation_buttons,
     })
 }
 
@@ -825,6 +828,7 @@ fn set_settings(
         state.affinity_deactivate_on_quit = settings.affinity_deactivate_on_quit;
         state.google_fonts_enabled = settings.google_fonts_enabled;
         state.glyph_size = settings.glyph_size.clamp(12, 32);
+        state.swap_activation_buttons = settings.swap_activation_buttons;
         store::save(&state)?;
     }
     allow_dir(

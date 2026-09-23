@@ -538,5 +538,15 @@
   "toast.googleCacheFailed": "Couldn't clear the preview cache",
   "settings.googleFontsLocation": "Installed Google fonts",
   "settings.googleFontsLocationSub": "Activated styles land here and become visible to other apps.",
-  "settings.googleFontsLocationEmpty": "No folder yet"
+  "settings.googleFontsLocationEmpty": "No folder yet",
+  "card.activateFixed": "Activate {name} permanently",
+  "card.deactivateFixed": "Deactivate {name}",
+  "card.sessionFamily": "Toggle {name} until quit",
+  "card.sessionStyle": "Toggle {name} style until quit",
+  "settings.lampButtons": "Activation lamp",
+  "settings.lampSwap": "Swap the lamp mouse buttons",
+  "settings.lampSwapSub": "Left click activates permanently, right click (or Shift+left click) activates until quit. Caps Lock always activates until quit.",
+  "infobar.lampDefault": "Lamp: left click = permanent · right click or Shift+left click = until quit",
+  "infobar.lampSwapped": "Lamp: left click = until quit · right click or Shift+left click = permanent",
+  "infobar.capsLock": "Caps Lock = always until quit"
 }
