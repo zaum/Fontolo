@@ -538,5 +538,6 @@
   "infobar.lampDefault": "ランプ：左クリック = 常時 · 右クリックまたは Shift+左クリック = 終了まで",
   "infobar.lampSwapped": "ランプ：左クリック = 終了まで · 右クリックまたは Shift+左クリック = 常時",
   "infobar.capsLock": "Caps Lock = 常に終了まで",
-  "infobar.doubleClick": "フォントをダブルクリック = 詳細の表示切替"
+  "infobar.doubleClick": "フォントをダブルクリック = 詳細の表示切替",
+  "infobar.drag": "フォントをサイドバーのお気に入り・有効・無効へドラッグ"
 }

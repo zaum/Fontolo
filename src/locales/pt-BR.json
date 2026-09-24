@@ -560,5 +560,6 @@
   "infobar.lampDefault": "Lâmpada: clique esquerdo = permanente · clique direito ou Shift+clique esquerdo = até sair",
   "infobar.lampSwapped": "Lâmpada: clique esquerdo = até sair · clique direito ou Shift+clique esquerdo = permanente",
   "infobar.capsLock": "Caps Lock = sempre até sair",
-  "infobar.doubleClick": "Clique duplo em uma fonte = mostrar/ocultar detalhes"
+  "infobar.doubleClick": "Clique duplo em uma fonte = mostrar/ocultar detalhes",
+  "infobar.drag": "Arraste fontes para Favoritos, Ativadas ou Desativadas na barra lateral"
 }

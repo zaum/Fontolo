@@ -549,5 +549,6 @@
   "infobar.lampDefault": "Lamp: left click = permanent · right click or Shift+left click = until quit",
   "infobar.lampSwapped": "Lamp: left click = until quit · right click or Shift+left click = permanent",
   "infobar.capsLock": "Caps Lock = always until quit",
-  "infobar.doubleClick": "Double-click a font = toggle details"
+  "infobar.doubleClick": "Double-click a font = toggle details",
+  "infobar.drag": "Drag fonts onto sidebar Favorites, Activated or Deactivated"
 }

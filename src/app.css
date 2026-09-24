@@ -1262,7 +1262,7 @@
 .infobar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
   flex-shrink: 0;

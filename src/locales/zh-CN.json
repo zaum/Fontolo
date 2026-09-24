@@ -546,5 +546,6 @@
   "infobar.lampDefault": "指示灯：左键 = 永久 · 右键或 Shift+左键 = 至退出",
   "infobar.lampSwapped": "指示灯：左键 = 至退出 · 右键或 Shift+左键 = 永久",
   "infobar.capsLock": "大写锁定 = 始终至退出",
-  "infobar.doubleClick": "双击字体 = 显示/隐藏详情"
+  "infobar.doubleClick": "双击字体 = 显示/隐藏详情",
+  "infobar.drag": "将字体拖到侧栏的收藏、已启用或已停用"
 }

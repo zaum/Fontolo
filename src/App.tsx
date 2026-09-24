@@ -59,6 +59,10 @@ function InfoBar() {
   const swap = useFontStore((s) => s.settings.swapActivationButtons);
   return (
     <footer className="infobar" role="note">
+      <span className="infobar-item infobar-drag">{t("infobar.drag")}</span>
+      <span className="infobar-sep" aria-hidden="true">
+        ·
+      </span>
       <span className="infobar-item">{t(swap ? "infobar.lampSwapped" : "infobar.lampDefault")}</span>
       <span className="infobar-sep" aria-hidden="true">
         ·

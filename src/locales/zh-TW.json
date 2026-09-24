@@ -538,5 +538,6 @@
   "infobar.lampDefault": "指示燈：左鍵 = 永久 · 右鍵或 Shift+左鍵 = 至結束",
   "infobar.lampSwapped": "指示燈：左鍵 = 至結束 · 右鍵或 Shift+左鍵 = 永久",
   "infobar.capsLock": "大寫鎖定 = 一律至結束",
-  "infobar.doubleClick": "按兩下字型 = 顯示/隱藏詳細資訊"
+  "infobar.doubleClick": "按兩下字型 = 顯示/隱藏詳細資訊",
+  "infobar.drag": "將字型拖曳到側邊欄的最愛、已啟用或已停用"
 }

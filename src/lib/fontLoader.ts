@@ -25,6 +25,15 @@ const cache = new Map<string, CacheEntry>();
 let cacheBytes = 0;
 const listeners = new Map<string, Set<() => void>>();
 const visiblePreviewNames = new Set<string>();
+/** Previews mounted on screen right now, ref-counted: the card's lead preview
+ * and an expanded style row can mount the same face twice. A mounted preview
+ * must never be evicted — evicting it either loops load → evict → reload
+ * (flicker) or leaves the sample silently rendered in the fallback font. */
+const mountedPreviewNames = new Map<string, number>();
+/** Mounted hooks stay subscribed for their whole lifetime: a later eviction
+ * or a retried failure has to repaint the sample, not leave it stale. The
+ * one-shot `listeners` above are for promise callers only. */
+const previewSubscribers = new Map<string, Set<() => void>>();
 let nextLoadId = 0;
 let previewEnabled = false;
 const previewGateListeners = new Set<() => void>();
@@ -109,6 +118,32 @@ function dropEntry(name: string): void {
 function notify(name: string): void {
   listeners.get(name)?.forEach((fn) => fn());
   listeners.delete(name);
+  previewSubscribers.get(name)?.forEach((fn) => fn());
+}
+
+/** Pins a mounted preview against eviction until the returned release runs. */
+function pinPreview(name: string): () => void {
+  mountedPreviewNames.set(name, (mountedPreviewNames.get(name) ?? 0) + 1);
+  return () => {
+    const remaining = (mountedPreviewNames.get(name) ?? 1) - 1;
+    if (remaining <= 0) mountedPreviewNames.delete(name);
+    else mountedPreviewNames.set(name, remaining);
+  };
+}
+
+/** Wakes a mounted hook on every state change of its preview entry. */
+function subscribePreview(name: string, fn: () => void): () => void {
+  const set = previewSubscribers.get(name) ?? new Set();
+  set.add(fn);
+  previewSubscribers.set(name, set);
+  return () => {
+    set.delete(fn);
+    if (set.size === 0) previewSubscribers.delete(name);
+  };
+}
+
+function isPreviewPinned(name: string): boolean {
+  return visiblePreviewNames.has(name) || mountedPreviewNames.has(name);
 }
 
 function removeEntry(name: string, entry: CacheEntry): void {
@@ -158,7 +193,7 @@ function evictIfNeeded(): void {
   // evicted, even when they alone exceed the ceiling — a card on screen must
   // not fall back to the browser font while it is being looked at.
   while (cache.size > FONT_CACHE_MAX || cacheBytes > FONT_CACHE_BYTES) {
-    const oldest = [...cache.keys()].find((name) => !visiblePreviewNames.has(name));
+    const oldest = [...cache.keys()].find((name) => !isPreviewPinned(name));
     if (oldest === undefined) break;
     const entry = cache.get(oldest);
     if (entry) removeEntry(oldest, entry);
@@ -352,20 +387,17 @@ export function useFontCss(face: ZFontFace | null): {
     if (!face || !name) return;
     if (localPreviewTooLarge(face)) return;
     if (!previewEnabled) return listenForPreviewGate(() => bump((n) => n + 1));
-    let stop: (() => void) | undefined;
-    const load = () => {
-      ensureLoaded(face);
-      if (getState(name) !== "loading") return;
-      const set = listeners.get(name) ?? new Set();
-      const fn = () => bump((n) => n + 1);
-      set.add(fn);
-      listeners.set(name, set);
-      stop = () => set.delete(fn);
-    };
-    const cancel = schedulePreviewLoad(load);
+    // Pin for the mount's lifetime: an expanded style row is on screen, so the
+    // cache must never evict its font from under the visible sample.
+    const unpin = pinPreview(name);
+    // Subscribe for the mount's lifetime too — a later eviction or retry has
+    // to repaint this sample, not leave it showing the fallback font.
+    const unsubscribe = subscribePreview(name, () => bump((n) => n + 1));
+    const cancel = schedulePreviewLoad(() => ensureLoaded(face));
     return () => {
+      unpin();
+      unsubscribe();
       cancel();
-      stop?.();
     };
   }, [face, name, gateVersion]);
 
@@ -429,8 +461,9 @@ export function useGoogleFaceCss(
   useEffect(() => {
     if (!files || files.length === 0) return;
     if (!previewEnabled) return listenForPreviewGate(() => bump((n) => n + 1));
-    let stop: (() => void) | undefined;
-    const load = () => {
+    const unpin = pinPreview(name);
+    const unsubscribe = subscribePreview(name, () => bump((n) => n + 1));
+    const cancel = schedulePreviewLoad(() => {
       ensureSources(
         name,
         // Web font cuts are a few tens of KB each; the byte budget only has to
@@ -438,17 +471,11 @@ export function useGoogleFaceCss(
         () => Promise.resolve(files.map((file) => ({ url: convertFileSrc(file.path), unicodeRange: file.unicodeRange }))),
         files.length * 64 * 1024,
       );
-      if (getState(name) !== "loading") return;
-      const set = listeners.get(name) ?? new Set();
-      const fn = () => bump((n) => n + 1);
-      set.add(fn);
-      listeners.set(name, set);
-      stop = () => set.delete(fn);
-    };
-    const cancel = schedulePreviewLoad(load);
+    });
     return () => {
+      unpin();
+      unsubscribe();
       cancel();
-      stop?.();
     };
   }, [name, files, gateVersion]);
 

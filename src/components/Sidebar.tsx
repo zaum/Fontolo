@@ -600,6 +600,7 @@ export function Sidebar() {
           label={t("side.favorites")}
           count={favorites.length}
           index={i++}
+          onDropFamilies={(families) => void useFontStore.getState().favoriteMany(families)}
         />
         <NavRow
           active={browse === "lastImported"}
@@ -620,6 +621,7 @@ export function Sidebar() {
           label={t("side.activated")}
           count={activatedCount}
           index={i++}
+          onDropFamilies={(families) => void useFontStore.getState().setFamiliesActiveBulk(families, true)}
         />
         <NavRow
           active={browse === "activatedSession"}
@@ -650,6 +652,7 @@ export function Sidebar() {
           label={t("side.deactivated")}
           count={deactivatedCount}
           index={i++}
+          onDropFamilies={(families) => void useFontStore.getState().setFamiliesActiveBulk(families, false)}
         />
         <NavRow
           active={browse === "system"}

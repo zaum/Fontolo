@@ -1,6 +1,6 @@
 [package]
 name = "fontolo"
-version = "0.3.61"
+version = "0.3.62"
 description = "Cross-platform font manager: preview, tag, activate/deactivate, and install fonts"
 authors = ["zaum"]
 license = "GPL-3.0-only"

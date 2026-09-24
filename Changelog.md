@@ -6,6 +6,22 @@
 
 ---
 
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🚀 Features · Sidebar Drop Targets for Favorites and Activation
+* The Favorites sidebar row now accepts dragged fonts and marks every dropped family as a favorite.
+* The Activated and Deactivated sidebar rows accept dragged fonts and permanently activate or deactivate them in bulk, with the usual undo toast.
+* The bottom hint strip describes the drag gestures next to the keyboard hints — left-aligned and translated into all nine shipped languages.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🐛 Fixes · Expanded Style Previews Flickering or Falling Back
+* Expanding a card's style list no longer makes previews reload repeatedly: mounted previews are now pinned in the browser font cache (ref-counted, so a lead preview and its expanded row can share one face), and the eviction pass can never remove a font that is on screen.
+* A preview whose cache entry was evicted or retried after the first load now repaints instead of silently falling back to the browser default font — hooks stay subscribed for their whole mount lifetime instead of a single one-shot notification.
+
+`Direct Commit` · `pending`
+
+---
 ### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🎨 UI/UX · Drag Preview Restyle
 * Removed the opaque rectangular backdrop from the font drag preview so only the floating cards follow the cursor.
 * Reduced the preview cards to half their previous size, and a multi-font drag now shows the Fontolo application icon three times with the total count on the leading icon.
