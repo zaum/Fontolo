@@ -1,6 +1,6 @@
 # Fontolo — Changelog
 
-* **Total commits:** 87
+* **Total commits:** 88
 * **Date range:** 2026-09-14 – 2026-09-24
 * **Environment / Context:** Main branch development — compare panel polish, drag-and-drop tagging, sidebar filter fixes, icon refresh and UI token cleanup
 
@@ -11,7 +11,7 @@
 * The Activated and Deactivated sidebar rows accept dragged fonts and permanently activate or deactivate them in bulk, with the usual undo toast.
 * The bottom hint strip describes the drag gestures next to the keyboard hints — left-aligned and translated into all nine shipped languages.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `04f5527`
 
 ---
 
@@ -19,7 +19,7 @@
 * Expanding a card's style list no longer makes previews reload repeatedly: mounted previews are now pinned in the browser font cache (ref-counted, so a lead preview and its expanded row can share one face), and the eviction pass can never remove a font that is on screen.
 * A preview whose cache entry was evicted or retried after the first load now repaints instead of silently falling back to the browser default font — hooks stay subscribed for their whole mount lifetime instead of a single one-shot notification.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `04f5527`
 
 ---
 ### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🎨 UI/UX · Drag Preview Restyle
