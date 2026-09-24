@@ -1,7 +1,11 @@
-
-
 :root,
 :root[data-theme="dark"] {
+  --compare-panel-bg: #ffffff;
+  --compare-panel-text: #2e2e3a;
+  --compare-panel-muted: rgba(46, 46, 58, 0.56);
+  --compare-panel-border: rgba(46, 46, 58, 0.12);
+  --compare-col-bg: #fafafd;
+
   color-scheme: dark;
 
   --ink-rgb: 255, 255, 255;

@@ -106,7 +106,10 @@ export function CompareOverlay() {
                 <X size={15} strokeWidth={1.5} />
               </button>
             </header>
-            <div className="compare-grid" style={{ "--cols": families.length } as React.CSSProperties}>
+            <div
+              className={`compare-grid ${families.length === 2 ? "compare-grid-2" : ""} compare-grid-${families.length <= 2 ? "stacked" : "auto"}`}
+              style={{ "--cols": families.length } as React.CSSProperties}
+            >
               {families.map((f) => (
                 <CompareColumn
                   key={f.name}

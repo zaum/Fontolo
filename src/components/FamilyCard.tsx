@@ -1,6 +1,27 @@
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ChevronRight, Star, X } from "lucide-react";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+
+const FONT_DROP_EVENT = "fontolo-drop-families";
+
+type PointerDrag = { families: string[]; preview: HTMLElement; started: boolean; x: number; y: number };
+
+function createDragPreview(families: string[]) {
+  const preview = document.createElement("div");
+  preview.className = "font-drag-preview";
+  const stack = document.createElement("div");
+  stack.className = "font-drag-stack";
+  const visible = families.length > 1 ? families.slice(0, 3) : families;
+  visible.forEach((name, index) => {
+    const item = document.createElement("span");
+    item.className = `font-drag-icon font-drag-icon-${index}`;
+    item.textContent = families.length > 1 && index === 0 ? String(families.length) : name.slice(0, 1).toUpperCase();
+    stack.appendChild(item);
+  });
+  preview.appendChild(stack);
+  document.body.appendChild(preview);
+  return preview;
+}
 import { ActivationLamp } from "../design/primitives/PillToggle";
 import { spring, springBouncy, springSnappy, springSoft } from "../design/springs";
 import { useFontCss } from "../lib/fontLoader";
@@ -105,6 +126,7 @@ function FacePreview({
 
 export const FamilyCard = memo(function FamilyCard({ family }: { family: Family }) {
   const t = useT();
+  const pointerDrag = useRef<PointerDrag | null>(null);
   const sampleText = useFontStore((s) => s.sampleText);
   const sampleUseFontName = useFontStore((s) => s.sampleUseFontName);
   const sizeIndex = useFontStore((s) => s.sizeIndex);
@@ -165,14 +187,54 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
     <article
       className={`family-card ${selected ? "card-selected" : ""} ${expanded ? "card-expanded" : ""}`}
       data-family={family.name}
-      draggable
+      draggable={false}
+      onPointerDown={(e) => {
+        if (
+          e.button !== 0 ||
+          (e.target as HTMLElement).closest("button, .tag-chip, .tag-add")
+        ) return;
+        e.preventDefault();
+        const st = useFontStore.getState();
+        const families = st.selection.includes(family.name) ? st.selection : [family.name];
+        pointerDrag.current = { families, preview: document.createElement("div"), started: false, x: e.clientX, y: e.clientY };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const drag = pointerDrag.current;
+        if (!drag) return;
+        if (!drag.started && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 7) return;
+        if (!drag.started) {
+          drag.started = true;
+          drag.preview = createDragPreview(drag.families);
+          drag.preview.classList.add("font-drag-preview-active");
+          document.body.appendChild(drag.preview);
+        }
+        drag.preview.style.left = `${e.clientX + 16}px`;
+        drag.preview.style.top = `${e.clientY + 16}px`;
+        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        document.querySelectorAll("[data-font-drop-target]").forEach((el) => el.classList.toggle("font-drop-hover", el === target));
+      }}
+      onPointerUp={(e) => {
+        const drag = pointerDrag.current;
+        pointerDrag.current = null;
+        if (!drag) return;
+        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        target?.dispatchEvent(new CustomEvent(FONT_DROP_EVENT, { detail: drag.families, bubbles: true }));
+        drag.preview.remove();
+        document.querySelectorAll("[data-font-drop-target]").forEach((el) => el.classList.remove("font-drop-hover"));
+      }}
+      onPointerCancel={() => { pointerDrag.current?.preview.remove(); pointerDrag.current = null; }}
       onDragStart={(e) => {
         const st = useFontStore.getState();
         const families = st.selection.includes(family.name) ? st.selection : [family.name];
         if (!st.selection.includes(family.name)) st.selectWith(family.name, "single", st.visibleOrder);
         e.dataTransfer.effectAllowed = "copy";
         e.dataTransfer.setData("application/x-fontolo-families", JSON.stringify(families));
+        e.dataTransfer.setData("application/json", JSON.stringify({ families }));
         e.dataTransfer.setData("text/plain", families.join("\n"));
+        const preview = createDragPreview(families);
+        e.dataTransfer.setDragImage(preview, 28, 28);
+        window.setTimeout(() => preview.remove(), 200);
       }}
       onClick={(e) => {
         // A plain click on the body only selects — buttons (star, pill,

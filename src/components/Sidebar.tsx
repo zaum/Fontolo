@@ -29,6 +29,7 @@ function NavRow({
   dataTour,
   tag,
   onDropFamilies,
+  onClear,
 }: {
   active: boolean;
   lead: boolean;
@@ -48,13 +49,29 @@ function NavRow({
   /** Tags use the same outlined chip treatment as font-card tags. */
   tag?: boolean;
   onDropFamilies?: (families: string[]) => void;
+  onClear?: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const dropTargetRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!onDropFamilies) return;
+    const handleDrop = (event: Event) => {
+      const target = event.target as HTMLElement;
+      const families = (event as CustomEvent<string[]>).detail;
+      if (target === dropTargetRef.current && Array.isArray(families)) onDropFamilies(families);
+    };
+    document.addEventListener("fontolo-drop-families", handleDrop);
+    return () => document.removeEventListener("fontolo-drop-families", handleDrop);
+  }, [onDropFamilies]);
   return (
     <motion.button
-      ref={rowRef}
+      ref={(el) => {
+        dropTargetRef.current = el;
+        rowRef?.(el);
+      }}
       data-tour={dataTour}
       data-family-row={related ? label : undefined}
+      data-font-drop-target={onDropFamilies ? true : undefined}
       className={`nav-row ${tag ? "nav-tag" : ""} ${active ? "nav-active" : ""} ${related ? "nav-related" : ""} ${pulsing ? "nav-sync-pulse" : ""} ${dragOver ? "nav-drop-target" : ""}`}
       onClick={onPick}
       onContextMenu={onContextMenu}
@@ -76,7 +93,15 @@ function NavRow({
         if (!onDropFamilies) return;
         e.preventDefault();
         try {
-          const families = JSON.parse(e.dataTransfer.getData("application/x-fontolo-families"));
+          const raw =
+            e.dataTransfer.getData("application/x-fontolo-families") ||
+            e.dataTransfer.getData("application/json") ||
+            e.dataTransfer.getData("text/plain");
+          const families = raw.startsWith("[")
+            ? JSON.parse(raw)
+            : raw.startsWith("{")
+              ? JSON.parse(raw).families
+              : raw.split("\n").map((name) => name.trim()).filter(Boolean);
           if (Array.isArray(families) && families.every((name) => typeof name === "string")) onDropFamilies(families);
         } catch { /* Ignore drops that did not originate in Fontolo. */ }
       }}
@@ -92,6 +117,27 @@ function NavRow({
       {icon && <span className="nav-icon">{icon}</span>}
       <span className="nav-label">{label}</span>
       {count !== undefined && <span className="nav-count tabular">{count}</span>}
+      {active && onClear && (
+        <span
+          className="nav-clear"
+          role="button"
+          tabIndex={0}
+          aria-label="Clear tag filter"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onClear();
+            }
+          }}
+        >
+          ×
+        </span>
+      )}
     </motion.button>
   );
 }
@@ -404,8 +450,7 @@ export function Sidebar() {
 
   const pickBrowse = (b: BrowseKind) => {
     if (b === "library") {
-      // Library resets every block.
-      setFilterSel([], [], []);
+      // Keep active filters while returning to the library.
       setBrowse("library");
     } else {
       setBrowse(b);
@@ -791,6 +836,7 @@ export function Sidebar() {
                 label={tag}
                 count={count}
                 index={i++}
+                onClear={() => setFilterSel(colSel, tagSel.filter((name) => name !== tag), foundrySel)}
                 onDropFamilies={(families) => void useFontStore.getState().applyTagToFamilies(tag, families)}
                 related={hasRelated && related.tags.includes(tag)}
                 rowRef={hasRelated && related.tags.includes(tag) ? setRowRef(`${focused}|t:${tag}`) : undefined}

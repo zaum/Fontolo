@@ -466,7 +466,11 @@ export function TopBar() {
       transition={{ ...springSoft, delay: 0.06 }}
     >
       <div className="topbar-field topbar-search">
-        <Search size={14} strokeWidth={1.5} className="field-icon" />
+        <Search
+          size={14}
+          strokeWidth={search.length > 0 ? 2 : 1.5}
+          className={`field-icon ${search.length > 0 ? "field-icon-active" : ""}`}
+        />
         <input
           id="global-search"
           value={search}

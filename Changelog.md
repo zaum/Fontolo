@@ -1,8 +1,18 @@
 # Fontolo — Changelog
 
-* **Total commits:** 82
-* **Date range:** 2026-09-14 – 2026-09-23
-* **Environment / Context:** Main branch development — activation lamp gestures, sidebar persistence, grid scroll stability, scan performance and Google Fonts rebuild
+* **Total commits:** 85
+* **Date range:** 2026-09-14 – 2026-09-24
+* **Environment / Context:** Main branch development — compare panel polish, drag-and-drop tagging, sidebar filter fixes, icon refresh and UI token cleanup
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🛠️ Maintenance · Compare, Drag-and-Drop and Sidebar Interaction Polish
+* Reworked the Compare overlay into a near-full-screen white panel with adaptive card layouts: two cards stack vertically and larger sets fan into responsive columns while filling the available space.
+* Added pointer-based font dragging with a larger cursor preview: up to three fanned icons, the total font count on the leading icon, and targeted drops that apply the chosen tag or collection only to the hovered row.
+* Restored the tag chip removal affordance and the sidebar tag clear control, while preserving active filters when returning to Library.
+* Refreshed the application icon set from the root SVG source, aligned the accent cleanup and search icon state, and bumped the app version to `0.3.58`.
+
+`Direct Commit` · `pending`
 
 ---
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Double-Click Opens the Detail Panel
