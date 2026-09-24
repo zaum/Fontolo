@@ -1,6 +1,6 @@
 # Fontolo — Changelog
 
-* **Total commits:** 88
+* **Total commits:** 90
 * **Date range:** 2026-09-14 – 2026-09-24
 * **Environment / Context:** Main branch development — compare panel polish, drag-and-drop tagging, sidebar filter fixes, icon refresh and UI token cleanup
 
@@ -11,7 +11,7 @@
 * Dropped the persisted sort preference, its store state and setter, and the three sort locale keys from all nine shipped languages.
 * The app version moved to `0.3.64`.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `ea3a131`
 
 ---
 
@@ -21,7 +21,7 @@
 * A drop that mixes applicable and inapplicable fonts now acts only on the applicable ones instead of running the same action on everything.
 * The bottom hint strip lists all four drop targets in every shipped language, and the app version moved to `0.3.63`.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `ea3a131`
 
 ---
 
