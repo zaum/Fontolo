@@ -7,6 +7,28 @@ import { SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN, allFoundry
 import { exportFontList } from "../lib/menus";
 import { t as translate, useT } from "../lib/i18n";
 import { APP_VERSION } from "../lib/version";
+import { applicableFamilies, registerDropFilter, type FamilyDropFilter } from "../lib/dropTargets";
+
+// Sidebar drop filters: a row only lights up — and only acts — for the
+// dragged families it can actually change.
+const dropFilterFavorites: FamilyDropFilter = (families) =>
+  families.filter((f) => !useFontStore.getState().favorites.includes(f));
+const dropFilterActivate: FamilyDropFilter = (families) =>
+  families.filter((f) =>
+    useFontStore.getState().fonts.some((x) => x.family === f && x.deactivatable && !x.active),
+  );
+const dropFilterSession: FamilyDropFilter = (families) => {
+  const st = useFontStore.getState();
+  return families.filter(
+    (f) =>
+      !st.sessionActivated.includes(f) &&
+      st.fonts.some((x) => x.family === f && x.deactivatable && !x.active),
+  );
+};
+const dropFilterDeactivate: FamilyDropFilter = (families) =>
+  families.filter((f) =>
+    useFontStore.getState().fonts.some((x) => x.family === f && x.deactivatable && x.active),
+  );
 
 // Anchor for shift+click range selection, and the key of the last picked
 // row — it owns the gliding pill inside a multi-selected section.
@@ -29,6 +51,7 @@ function NavRow({
   dataTour,
   tag,
   onDropFamilies,
+  dropFilter,
   onClear,
 }: {
   active: boolean;
@@ -49,20 +72,31 @@ function NavRow({
   /** Tags use the same outlined chip treatment as font-card tags. */
   tag?: boolean;
   onDropFamilies?: (families: string[]) => void;
+  /** Narrows a drop to the families this row can actually change; an empty
+      result means the row ignores the gesture (no hover, no action). */
+  dropFilter?: FamilyDropFilter;
   onClear?: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const dropTargetRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (!onDropFamilies) return;
+    const el = dropTargetRef.current;
+    if (el) registerDropFilter(el, dropFilter);
     const handleDrop = (event: Event) => {
       const target = event.target as HTMLElement;
       const families = (event as CustomEvent<string[]>).detail;
-      if (target === dropTargetRef.current && Array.isArray(families)) onDropFamilies(families);
+      if (target === dropTargetRef.current && Array.isArray(families)) {
+        const usable = applicableFamilies(target, families);
+        if (usable.length > 0) onDropFamilies(usable);
+      }
     };
     document.addEventListener("fontolo-drop-families", handleDrop);
-    return () => document.removeEventListener("fontolo-drop-families", handleDrop);
-  }, [onDropFamilies]);
+    return () => {
+      document.removeEventListener("fontolo-drop-families", handleDrop);
+      if (el) registerDropFilter(el, undefined);
+    };
+  }, [onDropFamilies, dropFilter]);
   return (
     <motion.button
       ref={(el) => {
@@ -102,7 +136,12 @@ function NavRow({
             : raw.startsWith("{")
               ? JSON.parse(raw).families
               : raw.split("\n").map((name) => name.trim()).filter(Boolean);
-          if (Array.isArray(families) && families.every((name) => typeof name === "string")) onDropFamilies(families);
+          if (Array.isArray(families) && families.every((name) => typeof name === "string")) {
+            const usable = dropTargetRef.current
+              ? applicableFamilies(dropTargetRef.current, families)
+              : families;
+            if (usable.length > 0) onDropFamilies(usable);
+          }
         } catch { /* Ignore drops that did not originate in Fontolo. */ }
       }}
       initial={{ opacity: 0, x: -12 }}
@@ -601,6 +640,7 @@ export function Sidebar() {
           count={favorites.length}
           index={i++}
           onDropFamilies={(families) => void useFontStore.getState().favoriteMany(families)}
+          dropFilter={dropFilterFavorites}
         />
         <NavRow
           active={browse === "lastImported"}
@@ -622,6 +662,7 @@ export function Sidebar() {
           count={activatedCount}
           index={i++}
           onDropFamilies={(families) => void useFontStore.getState().setFamiliesActiveBulk(families, true)}
+          dropFilter={dropFilterActivate}
         />
         <NavRow
           active={browse === "activatedSession"}
@@ -632,6 +673,11 @@ export function Sidebar() {
           label={t("side.activatedUntilClose")}
           count={sessionCount}
           index={i++}
+          onDropFamilies={(families) => {
+            const st = useFontStore.getState();
+            for (const family of families) void st.activateFamilySession(family);
+          }}
+          dropFilter={dropFilterSession}
         />
         <NavRow
           active={browse === "affinity"}
@@ -653,6 +699,7 @@ export function Sidebar() {
           count={deactivatedCount}
           index={i++}
           onDropFamilies={(families) => void useFontStore.getState().setFamiliesActiveBulk(families, false)}
+          dropFilter={dropFilterDeactivate}
         />
         <NavRow
           active={browse === "system"}

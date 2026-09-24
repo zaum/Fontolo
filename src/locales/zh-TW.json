@@ -28,9 +28,6 @@
   "titlebar.minimize": "最小化",
   "titlebar.maximize": "最大化",
   "titlebar.close": "關閉",
-  "sort.name": "名稱",
-  "sort.styles": "樣式數",
-  "sort.size": "檔案大小",
   "filter.aria": "篩選字型",
   "filter.classification": "分類",
   "filter.languageSupport": "語言支援",
@@ -539,5 +536,5 @@
   "infobar.lampSwapped": "指示燈：左鍵 = 至結束 · 右鍵或 Shift+左鍵 = 永久",
   "infobar.capsLock": "大寫鎖定 = 一律至結束",
   "infobar.doubleClick": "按兩下字型 = 顯示/隱藏詳細資訊",
-  "infobar.drag": "將字型拖曳到側邊欄的最愛、已啟用或已停用"
+  "infobar.drag": "將字型拖曳到側邊欄的最愛、已啟用、關閉前啟用或已停用"
 }

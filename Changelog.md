@@ -6,6 +6,26 @@
 
 ---
 
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🛠️ Maintenance · Sort Selector Removed
+* Removed the name / styles / file size sort menu from the top bar; every view now lists families alphabetically by name.
+* Dropped the persisted sort preference, its store state and setter, and the three sort locale keys from all nine shipped languages.
+* The app version moved to `0.3.64`.
+
+`Direct Commit` · `pending`
+
+---
+
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🚀 Features · Conditional Sidebar Drops and Session Activation
+* The Activated until close sidebar row now accepts dragged fonts and session-activates every dropped family that is not already held for this session.
+* Drop targets only light up when they can change something: already-favorited fonts skip Favorites, fully active fonts skip Activated, fully deactivated fonts skip Deactivated, and session-held fonts skip Activated until close.
+* A drop that mixes applicable and inapplicable fonts now acts only on the applicable ones instead of running the same action on everything.
+* The bottom hint strip lists all four drop targets in every shipped language, and the app version moved to `0.3.63`.
+
+`Direct Commit` · `pending`
+
+---
+
+
 ### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🚀 Features · Sidebar Drop Targets for Favorites and Activation
 * The Favorites sidebar row now accepts dragged fonts and marks every dropped family as a favorite.
 * The Activated and Deactivated sidebar rows accept dragged fonts and permanently activate or deactivate them in bulk, with the usual undo toast.

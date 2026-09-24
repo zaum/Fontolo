@@ -28,9 +28,6 @@
   "titlebar.minimize": "最小化",
   "titlebar.maximize": "最大化",
   "titlebar.close": "閉じる",
-  "sort.name": "名前",
-  "sort.styles": "スタイル数",
-  "sort.size": "ファイルサイズ",
   "filter.aria": "フォントを絞り込む",
   "filter.classification": "分類",
   "filter.languageSupport": "対応言語",
@@ -539,5 +536,5 @@
   "infobar.lampSwapped": "ランプ：左クリック = 終了まで · 右クリックまたは Shift+左クリック = 常時",
   "infobar.capsLock": "Caps Lock = 常に終了まで",
   "infobar.doubleClick": "フォントをダブルクリック = 詳細の表示切替",
-  "infobar.drag": "フォントをサイドバーのお気に入り・有効・無効へドラッグ"
+  "infobar.drag": "フォントをサイドバーのお気に入り・有効・閉じるまで有効・無効へドラッグ"
 }

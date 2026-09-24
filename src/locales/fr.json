@@ -28,9 +28,6 @@
   "titlebar.minimize": "Réduire",
   "titlebar.maximize": "Agrandir",
   "titlebar.close": "Fermer",
-  "sort.name": "Nom",
-  "sort.styles": "Styles",
-  "sort.size": "Taille du fichier",
   "filter.aria": "Filtrer les polices",
   "filter.classification": "Classification",
   "filter.languageSupport": "Langues prises en charge",
@@ -561,5 +558,5 @@
   "infobar.lampSwapped": "Voyant : clic gauche = jusqu’à la fermeture · clic droit ou Maj+clic gauche = permanent",
   "infobar.capsLock": "Verr. Maj = toujours jusqu’à la fermeture",
   "infobar.doubleClick": "Double-clic sur une police = afficher/masquer les détails",
-  "infobar.drag": "Glissez des polices sur Favoris, Activées ou Désactivées de la barre latérale"
+  "infobar.drag": "Glissez des polices sur Favoris, Activées, Activées jusqu’à la fermeture ou Désactivées de la barre latérale"
 }

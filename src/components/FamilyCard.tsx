@@ -50,6 +50,7 @@ import { activeConflictsFor, conflictsFor, familyPartial, familySessionHeld, fon
 import { playStar, playTag } from "../lib/sound";
 import type { FontFace } from "../lib/ipc";
 import { useT } from "../lib/i18n";
+import { applicableFamilies } from "../lib/dropTargets";
 
 export function FormatBadge({ format, isVariable }: { format: string; isVariable: boolean }) {
   if (isVariable) return <span className="badge badge-variable">VAR</span>;
@@ -229,14 +230,17 @@ export const FamilyCard = memo(function FamilyCard({ family }: { family: Family 
         }
         drag.preview.style.left = `${e.clientX + 16}px`;
         drag.preview.style.top = `${e.clientY + 16}px`;
-        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        let target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        // A row whose filter rules out every dragged family is not a target.
+        if (target && applicableFamilies(target, drag.families).length === 0) target = null;
         document.querySelectorAll("[data-font-drop-target]").forEach((el) => el.classList.toggle("font-drop-hover", el === target));
       }}
       onPointerUp={(e) => {
         const drag = pointerDrag.current;
         pointerDrag.current = null;
         if (!drag) return;
-        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        let target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-font-drop-target]");
+        if (target && applicableFamilies(target, drag.families).length === 0) target = null;
         target?.dispatchEvent(new CustomEvent(FONT_DROP_EVENT, { detail: drag.families, bubbles: true }));
         drag.preview.remove();
         document.querySelectorAll("[data-font-drop-target]").forEach((el) => el.classList.remove("font-drop-hover"));

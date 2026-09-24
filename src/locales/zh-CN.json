@@ -28,9 +28,6 @@
   "titlebar.minimize": "最小化",
   "titlebar.maximize": "最大化",
   "titlebar.close": "关闭",
-  "sort.name": "名称",
-  "sort.styles": "样式数",
-  "sort.size": "文件大小",
   "filter.aria": "筛选字体",
   "filter.classification": "分类",
   "filter.languageSupport": "语言支持",
@@ -547,5 +544,5 @@
   "infobar.lampSwapped": "指示灯：左键 = 至退出 · 右键或 Shift+左键 = 永久",
   "infobar.capsLock": "大写锁定 = 始终至退出",
   "infobar.doubleClick": "双击字体 = 显示/隐藏详情",
-  "infobar.drag": "将字体拖到侧栏的收藏、已启用或已停用"
+  "infobar.drag": "将字体拖到侧栏的收藏、已启用、关闭前启用或已停用"
 }

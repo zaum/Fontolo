@@ -28,9 +28,6 @@
   "titlebar.minimize": "Minimieren",
   "titlebar.maximize": "Maximieren",
   "titlebar.close": "Schließen",
-  "sort.name": "Name",
-  "sort.styles": "Schnitte",
-  "sort.size": "Dateigröße",
   "filter.aria": "Schriften filtern",
   "filter.classification": "Klassifikation",
   "filter.languageSupport": "Sprachunterstützung",
@@ -550,5 +547,5 @@
   "infobar.lampSwapped": "Lampe: Linksklick = bis zum Beenden · Rechtsklick oder Umschalt+Linksklick = dauerhaft",
   "infobar.capsLock": "Feststelltaste = immer bis zum Beenden",
   "infobar.doubleClick": "Doppelklick auf eine Schrift = Details ein/aus",
-  "infobar.drag": "Schriften auf Favoriten, Aktiviert oder Deaktiviert in der Seitenleiste ziehen"
+  "infobar.drag": "Schriften auf Favoriten, Aktiviert, Aktiviert bis zum Schließen oder Deaktiviert in der Seitenleiste ziehen"
 }

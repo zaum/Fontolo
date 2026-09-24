@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ArrowUpDown,
   Check,
   Columns2,
   Filter,
@@ -14,71 +13,9 @@ import {
 import { useEffect, useState, type CSSProperties } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { springSnappy, springSoft } from "../design/springs";
-import { SIZES, useFontStore, type SortMode } from "../state/fontStore";
+import { SIZES, useFontStore } from "../state/fontStore";
 import type { Classification } from "../lib/ipc";
-import { useT, type TKey } from "../lib/i18n";
-
-const SORT_MODES = ["name", "styles", "size"] as const satisfies readonly SortMode[];
-
-const SORT_KEYS: Record<SortMode, TKey> = {
-  name: "sort.name",
-  styles: "sort.styles",
-  size: "sort.size",
-};
-
-function SortMenu() {
-  const t = useT();
-  const sort = useFontStore((s) => s.sort);
-  const setSort = useFontStore((s) => s.setSort);
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="sort-wrap">
-      <motion.button
-        className={`sort-btn ${open ? "sort-open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        whileTap={{ scale: 0.96 }}
-      >
-        <ArrowUpDown size={13} strokeWidth={1.5} />
-        <span>{t(SORT_KEYS[sort])}</span>
-      </motion.button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="menu-backdrop" onClick={() => setOpen(false)} />
-            <motion.ul
-              className="sort-menu glass-e3"
-              role="listbox"
-              initial={{ opacity: 0, y: -3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -2, transition: { duration: 0.08, ease: "easeOut" } }}
-              transition={{ duration: 0.12, ease: "easeOut" }}
-            >
-              {SORT_MODES.map((mode) => (
-                <li key={mode}>
-                  <button
-                    role="option"
-                    aria-selected={sort === mode}
-                    className={sort === mode ? "sort-item sort-active" : "sort-item"}
-                    onClick={() => {
-                      setSort(mode);
-                      setOpen(false);
-                    }}
-                  >
-                    <span>{t(SORT_KEYS[mode])}</span>
-                    {sort === mode && <Check size={13} strokeWidth={2} />}
-                  </button>
-                </li>
-              ))}
-            </motion.ul>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+import { useT } from "../lib/i18n";
 
 const CLASS_FILTERS = [
   "serif",
@@ -513,8 +450,6 @@ export function TopBar() {
       <FilterMenu />
 
       <ExpandAllButton />
-
-      <SortMenu />
 
       <CompareButton />
       <motion.button

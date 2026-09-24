@@ -79,7 +79,6 @@ const scanQueue = new ScanQueue(async (isCurrent) => {
 
 export type ViewMode = "grid" | "waterfall";
 export type MotionPref = "system" | "reduced";
-export type SortMode = "name" | "styles" | "size";
 
 // Collapsible sections of the left filter sidebar. Their open/closed state is
 // a UI preference, so it is persisted with the other prefs and survives a
@@ -221,7 +220,6 @@ interface FontStore {
   sampleCustoms: string[];
   sizeIndex: number;
   viewMode: ViewMode;
-  sort: SortMode;
   search: string;
   expandSignal: number;
   expandOpen: boolean;
@@ -301,7 +299,6 @@ interface FontStore {
   setSampleCustoms: (customs: string[]) => void;
   setSizeIndex: (i: number) => void;
   setViewMode: (m: ViewMode) => void;
-  setSort: (s: SortMode) => void;
   setSearch: (s: string) => void;
   toggleClassFilter: (c: Classification) => void;
   toggleScriptFilter: (s: string) => void;
@@ -408,7 +405,6 @@ function persistPrefs(get: () => FontStore) {
       sampleCustoms: s.sampleCustoms,
       sizeIndex: s.sizeIndex,
       viewMode: s.viewMode,
-      sort: s.sort,
       panelWidth: s.panelWidth,
       sidebarWidth: s.sidebarWidth,
       sidebarSections: s.sidebarSections,
@@ -535,7 +531,6 @@ export const useFontStore = create<FontStore>((set, get) => ({
   sampleCustoms: [],
   sizeIndex: 3,
   viewMode: "grid",
-  sort: "name",
   search: "",
   expandSignal: 0,
   expandOpen: false,
@@ -595,9 +590,6 @@ export const useFontStore = create<FontStore>((set, get) => ({
         )
           ? (prefs.viewMode as ViewMode)
           : "grid",
-        sort: (["name", "styles", "size"] as const).includes(prefs.sort as SortMode)
-          ? (prefs.sort as SortMode)
-          : "name",
         panelWidth:
           typeof prefs.panelWidth === "number"
             ? Math.min(800, Math.max(300, prefs.panelWidth))
@@ -1747,10 +1739,6 @@ export const useFontStore = create<FontStore>((set, get) => ({
     set({ viewMode });
     persistPrefs(get);
   },
-  setSort: (sort) => {
-    set({ sort });
-    persistPrefs(get);
-  },
   setSearch: (search) => set({ search }),
   toggleClassFilter: (c) => {
     const cur = get().classFilter;
@@ -2125,7 +2113,6 @@ export function selectVisibleFamilies(s: {
   selCols: string[];
   selTags: string[];
   selFoundrys?: string[];
-  sort: SortMode;
   googleCatalog?: GoogleFamily[];
   googleMeta?: Record<string, GoogleFamilyInfo | undefined>;
 }): Family[] {
@@ -2208,16 +2195,7 @@ export function selectVisibleFamilies(s: {
         (s.notes[f.name]?.toLowerCase().includes(q) ?? false),
     );
   }
-  switch (s.sort) {
-    case "styles":
-      out.sort((a, b) => b.faces.length - a.faces.length || a.name.localeCompare(b.name));
-      break;
-    case "size":
-      out.sort((a, b) => b.totalSize - a.totalSize || a.name.localeCompare(b.name));
-      break;
-    default:
-      out.sort((a, b) => a.name.localeCompare(b.name));
-  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
 

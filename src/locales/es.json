@@ -28,9 +28,6 @@
   "titlebar.minimize": "Minimizar",
   "titlebar.maximize": "Maximizar",
   "titlebar.close": "Cerrar",
-  "sort.name": "Nombre",
-  "sort.styles": "Estilos",
-  "sort.size": "Tamaño de archivo",
   "filter.aria": "Filtrar fuentes",
   "filter.classification": "Clasificación",
   "filter.languageSupport": "Idiomas admitidos",
@@ -561,5 +558,5 @@
   "infobar.lampSwapped": "Lámpara: clic izquierdo = hasta salir · clic derecho o Mayús+clic izquierdo = permanente",
   "infobar.capsLock": "Bloq Mayús = siempre hasta salir",
   "infobar.doubleClick": "Doble clic en una fuente = mostrar/ocultar detalles",
-  "infobar.drag": "Arrastra fuentes a Favoritos, Activadas o Desactivadas de la barra lateral"
+  "infobar.drag": "Arrastra fuentes a Favoritos, Activadas, Activadas hasta cerrar o Desactivadas de la barra lateral"
 }

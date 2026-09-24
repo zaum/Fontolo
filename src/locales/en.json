@@ -28,9 +28,6 @@
   "titlebar.minimize": "Minimize",
   "titlebar.maximize": "Maximize",
   "titlebar.close": "Close",
-  "sort.name": "Name",
-  "sort.styles": "Styles",
-  "sort.size": "File size",
   "filter.aria": "Filter fonts",
   "filter.classification": "Classification",
   "filter.languageSupport": "Language support",
@@ -550,5 +547,5 @@
   "infobar.lampSwapped": "Lamp: left click = until quit · right click or Shift+left click = permanent",
   "infobar.capsLock": "Caps Lock = always until quit",
   "infobar.doubleClick": "Double-click a font = toggle details",
-  "infobar.drag": "Drag fonts onto sidebar Favorites, Activated or Deactivated"
+  "infobar.drag": "Drag fonts onto sidebar Favorites, Activated, Activated until close or Deactivated"
 }
