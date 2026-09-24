@@ -12,7 +12,7 @@
 * Restored the tag chip removal affordance and the sidebar tag clear control, while preserving active filters when returning to Library.
 * Refreshed the application icon set from the root SVG source, aligned the accent cleanup and search icon state, and bumped the app version to `0.3.58`.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `6552917`
 
 ---
 ### <sup><sub style="font-size: 0.7em;">2026-09-23</sub></sup> · 🚀 Features · Double-Click Opens the Detail Panel
