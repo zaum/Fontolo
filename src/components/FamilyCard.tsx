@@ -11,13 +11,31 @@ function createDragPreview(families: string[]) {
   preview.className = "font-drag-preview";
   const stack = document.createElement("div");
   stack.className = "font-drag-stack";
-  const visible = families.length > 1 ? families.slice(0, 3) : families;
-  visible.forEach((name, index) => {
-    const item = document.createElement("span");
-    item.className = `font-drag-icon font-drag-icon-${index}`;
-    item.textContent = families.length > 1 && index === 0 ? String(families.length) : name.slice(0, 1).toUpperCase();
-    stack.appendChild(item);
-  });
+  if (families.length === 1) {
+    const appIcon = document.createElement("img");
+    appIcon.className = "font-drag-icon font-drag-app-icon";
+    appIcon.src = "/icon.png";
+    appIcon.alt = "";
+    stack.appendChild(appIcon);
+  } else {
+    // Multiple selections always show the same three-icon fan, regardless of count.
+    [0, 1, 2].forEach((index) => {
+      const item = document.createElement("span");
+      item.className = `font-drag-icon font-drag-icon-${index}`;
+      const image = document.createElement("img");
+      image.className = "font-drag-icon-image";
+      image.src = "/icon.png";
+      image.alt = "";
+      item.appendChild(image);
+      if (index === 0) {
+        const badge = document.createElement("strong");
+        badge.className = "font-drag-count-badge";
+        badge.textContent = String(families.length);
+        item.appendChild(badge);
+      }
+      stack.appendChild(item);
+    });
+  }
   preview.appendChild(stack);
   document.body.appendChild(preview);
   return preview;

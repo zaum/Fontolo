@@ -2915,11 +2915,11 @@
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--settings-panel-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 22px rgba(var(--scrim-rgb), 0.2);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   pointer-events: none;
   z-index: 100;
 }
@@ -2927,24 +2927,57 @@
   left: 0;
   top: 0;
 }
-.font-drag-stack { display: flex; align-items: center; position: relative; width: 94px; height: 58px; }
+.font-drag-stack { display: flex; align-items: center; position: relative; width: 64px; height: 36px; }
 .font-drag-icon {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
-  border: 3px solid var(--settings-panel-bg);
-  background: var(--accent-a);
-  color: white;
-  font-size: var(--fs-14);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--canvas);
+  font-size: var(--fs-11);
   font-weight: 700;
-  box-shadow: 0 3px 8px rgba(var(--scrim-rgb), 0.25);
+  box-shadow: none;
 }
-.font-drag-icon-0 { left: 0; top: 2px; z-index: 3; }
-.font-drag-icon-1 { left: 25px; top: 1px; transform: rotate(8deg); z-index: 2; background: var(--accent-b); }
-.font-drag-icon-2 { left: 43px; top: 0; transform: rotate(16deg); z-index: 1; background: var(--text-primary); color: var(--canvas); }
+.font-drag-icon-image {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  object-fit: cover;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 5px rgba(var(--scrim-rgb), 0.2);
+}
+.font-drag-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  z-index: 4;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent-a);
+  color: var(--settings-panel-bg);
+  font-size: var(--fs-10);
+  line-height: 1;
+  border: 1px solid var(--glass-border);
+}
+.font-drag-app-icon {
+  left: 0;
+  top: 3px;
+  object-fit: cover;
+  background: var(--settings-panel-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 5px rgba(var(--scrim-rgb), 0.2);
+}
+.font-drag-icon-0 { left: 34px; top: 3px; z-index: 3; }
+.font-drag-icon-1 { left: 20px; top: 2px; transform: rotate(-8deg); z-index: 2; }
+.font-drag-icon-2 { left: 6px; top: 1px; transform: rotate(-16deg); z-index: 1; }
 .font-drop-hover {
   outline: 2px solid var(--accent-a);
   outline-offset: -2px;

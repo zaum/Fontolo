@@ -1,11 +1,20 @@
 # Fontolo — Changelog
 
-* **Total commits:** 85
+* **Total commits:** 87
 * **Date range:** 2026-09-14 – 2026-09-24
 * **Environment / Context:** Main branch development — compare panel polish, drag-and-drop tagging, sidebar filter fixes, icon refresh and UI token cleanup
 
 ---
 
+### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🎨 UI/UX · Drag Preview Restyle
+* Removed the opaque rectangular backdrop from the font drag preview so only the floating cards follow the cursor.
+* Reduced the preview cards to half their previous size, and a multi-font drag now shows the Fontolo application icon three times with the total count on the leading icon.
+* The single-icon preview now has the same shadow as the three-icon fan, and the fan opens to the left while keeping the count badge on the leading icon.
+* A single dragged font now shows the Fontolo application icon instead of a letter tile.
+
+`Direct Commit` · `pending`
+
+---
 ### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🛠️ Maintenance · Compare, Drag-and-Drop and Sidebar Interaction Polish
 * Reworked the Compare overlay into a near-full-screen white panel with adaptive card layouts: two cards stack vertically and larger sets fan into responsive columns while filling the available space.
 * Added pointer-based font dragging with a larger cursor preview: up to three fanned icons, the total font count on the leading icon, and targeted drops that apply the chosen tag or collection only to the hovered row.
