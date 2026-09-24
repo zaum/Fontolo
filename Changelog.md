@@ -12,7 +12,7 @@
 * The single-icon preview now has the same shadow as the three-icon fan, and the fan opens to the left while keeping the count badge on the leading icon.
 * A single dragged font now shows the Fontolo application icon instead of a letter tile.
 
-`Direct Commit` · `pending`
+`Direct Commit` · `d04d90d`
 
 ---
 ### <sup><sub style="font-size: 0.7em;">2026-09-24</sub></sup> · 🛠️ Maintenance · Compare, Drag-and-Drop and Sidebar Interaction Polish
